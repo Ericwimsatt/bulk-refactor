@@ -6,10 +6,13 @@ Refactor JavaScript/TypeScript files to one exported symbol per file.
 
 - Scans a target directory for files with multiple exports.
 - Creates a fresh git branch per target file.
-- Uses one general-purpose `smolagents` agent (Kimi model) to propose file operations.
-- Applies those operations.
+- Uses a deterministic Python pipeline to refactor exports:
+	- discovers exported declarations
+	- checks whether each export is imported elsewhere
+	- unexports declarations that are unused
+	- splits used exports to one-export wrapper files and rewrites safe imports
 - For `.ts`/`.tsx` files, runs type checking and pauses for manual review if type checking fails.
-- Uses the same agent to review the resulting diff.
+- Uses one general-purpose `smolagents` Kimi agent only for final diff review.
 - Commits only when review approves.
 - Persists process state to JSON for tracking and undo workflows.
 
@@ -44,6 +47,12 @@ Execute workflow:
 
 ```bash
 python oneExportPerFile.py -repo /home/user/git/stemwise -dir src/hooks
+```
+
+Execute with detailed progress logs:
+
+```bash
+python oneExportPerFile.py -repo /home/user/git/stemwise -dir src/hooks --verbose
 ```
 
 Optional model override:

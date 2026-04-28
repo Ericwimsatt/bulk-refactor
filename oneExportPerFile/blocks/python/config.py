@@ -19,6 +19,7 @@ class WorkflowConfig:
     model_id: str
     max_files: int
     dry_run: bool
+    verbose: bool
 
 
 def resolve_model_id(cli_model_id: str | None, use_latest_kimi_coding: bool = False) -> str:

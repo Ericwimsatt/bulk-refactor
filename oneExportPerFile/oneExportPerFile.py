@@ -26,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--max-files", type=int, default=0, help="Limit number of files (0 = no limit)")
     parser.add_argument("--dry-run", action="store_true", help="Only build state + candidates")
+    parser.add_argument("--verbose", action="store_true", help="Print detailed workflow progress")
     return parser
 
 
@@ -41,6 +42,7 @@ def main() -> int:
         model_id=resolve_model_id(args.model_id, use_latest_kimi_coding=args.latest_kimi_coding),
         max_files=args.max_files,
         dry_run=args.dry_run,
+        verbose=args.verbose,
     )
 
     state_file = run_one_export_workflow(cfg)

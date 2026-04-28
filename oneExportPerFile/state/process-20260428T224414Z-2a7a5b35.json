@@ -1,0 +1,15 @@
+{
+  "base_branch": "hook-cleanup",
+  "branches": [],
+  "candidates": [
+    "src/hooks/useTour.ts"
+  ],
+  "created_at": "2026-04-28T22:44:14.725618+00:00",
+  "errors": [],
+  "files": {},
+  "process_id": "20260428T224414Z-2a7a5b35",
+  "repo_root": "/home/user/git/stemwise",
+  "status": "started",
+  "target_dir": "src/hooks",
+  "updated_at": "2026-04-28T22:44:14.725628+00:00"
+}
