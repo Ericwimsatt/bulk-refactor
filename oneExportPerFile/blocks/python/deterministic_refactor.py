@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import os
 import re
 
 
@@ -312,20 +311,6 @@ def _replace_ranges(text: str, replacements: list[tuple[int, int, str]]) -> str:
     return "".join(out)
 
 
-def _module_specifier(from_file: Path, to_file: Path) -> str:
-    rel = os.path.relpath(str(to_file), str(from_file.parent))
-    spec = rel.replace("\\", "/")
-    if not spec.startswith("."):
-        spec = f"./{spec}"
-    # Prefer extensionless import specifiers for JS/TS projects.
-    return re.sub(r"\.(ts|tsx|js|jsx)$", "", spec)
-
-
-def _safe_wrapper_filename(symbol: str) -> str:
-    clean = re.sub(r"[^A-Za-z0-9_$]+", "_", symbol).strip("_")
-    return clean or "exported_symbol"
-
-
 def run_deterministic_refactor(repo_root: Path, target_file_rel: str) -> dict:
     repo_root = repo_root.resolve()
     target_file = (repo_root / target_file_rel).resolve()
@@ -343,67 +328,30 @@ def run_deterministic_refactor(repo_root: Path, target_file_rel: str) -> dict:
     used_decls = [d for d in decls if usage_map[d.name]]
     unused_decls = [d for d in decls if not usage_map[d.name]]
 
-    blockers: list[str] = []
-    for decl in used_decls:
-        for usage in usage_map[decl.name]:
-            if not usage.is_single_symbol_named_import:
-                rel_importer = usage.importer.relative_to(repo_root)
-                blockers.append(
-                    f"Unsupported multi-symbol import usage for {decl.name} in {rel_importer}: {usage.statement.strip()}"
-                )
-
-    if blockers:
+    # Never generate wrapper files or rewrite imports.
+    # If multiple exports are currently used, deterministic automation cannot
+    # enforce one-export-per-file without moving code and changing imports.
+    if len(used_decls) > 1:
         return {
             "notes": [
-                "Deterministic splitter paused because some imports cannot be safely rewritten automatically.",
-                *blockers,
+                "Manual review required: multiple exports are used by other files.",
+                "This mode never creates new files or rewrites imports.",
+                "Only files with <= 1 used export can be auto-cleaned by unexporting unused declarations.",
+                f"Used exports: {', '.join(d.name for d in used_decls)}",
             ],
             "manual_review_required": True,
         }
 
     replacements: list[tuple[int, int, str]] = []
-    for decl in decls:
+    for decl in unused_decls:
         replacements.append((decl.start, decl.end, _strip_export_keyword(decl.snippet)))
     rewritten_target_content = _replace_ranges(content, replacements)
 
-    target_file.write_text(rewritten_target_content, encoding="utf-8")
-
-    target_ext = target_file.suffix
-    target_stem = target_file.stem
-    wrapper_for_symbol: dict[str, Path] = {}
-    for decl in used_decls:
-        wrapper_name = f"{target_stem}.{_safe_wrapper_filename(decl.name)}{target_ext}"
-        wrapper_path = target_file.parent / wrapper_name
-        rel_to_wrapper_target = _module_specifier(wrapper_path, target_file)
-        wrapper_content = f"export {{ {decl.name} }} from \"{rel_to_wrapper_target}\";\n"
-        wrapper_path.write_text(wrapper_content, encoding="utf-8")
-        wrapper_for_symbol[decl.name] = wrapper_path
-
-    import_pattern = re.compile(
-        r"import\s*\{([^}]*)\}\s*from\s*['\"]([^'\"]+)['\"]\s*;?",
-        flags=re.MULTILINE,
-    )
-
-    for decl in used_decls:
-        symbol = decl.name
-        wrapper_path = wrapper_for_symbol[symbol]
-        for usage in usage_map[symbol]:
-            importer_text = usage.importer.read_text(encoding="utf-8")
-
-            def _rewriter(m: re.Match[str]) -> str:
-                names = [p.strip() for p in m.group(1).split(",") if p.strip()]
-                left_names = [p.split(" as ")[0].strip() for p in names]
-                if len(left_names) != 1 or left_names[0] != symbol:
-                    return m.group(0)
-
-                new_spec = _module_specifier(usage.importer.resolve(), wrapper_path.resolve())
-                return f'import {{ {m.group(1).strip()} }} from "{new_spec}";'
-
-            updated = import_pattern.sub(_rewriter, importer_text)
-            usage.importer.write_text(updated, encoding="utf-8")
+    if rewritten_target_content != content:
+        target_file.write_text(rewritten_target_content, encoding="utf-8")
 
     notes.append(
-        f"Processed {len(decls)} exports: {len(used_decls)} used (split to wrappers), {len(unused_decls)} unused (unexported)."
+        f"Processed {len(decls)} exports: {len(used_decls)} used (kept exported), {len(unused_decls)} unused (unexported)."
     )
 
     return {"notes": notes, "manual_review_required": False}
