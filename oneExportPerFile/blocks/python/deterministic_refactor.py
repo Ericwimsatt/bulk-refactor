@@ -213,10 +213,22 @@ def _candidate_source_files(repo_root: Path) -> list[Path]:
 
 
 def _resolve_import_target(importer: Path, specifier: str) -> Path | None:
-    if not specifier.startswith("."):
+    if specifier.startswith("."):
+        base = (importer.parent / specifier).resolve()
+    elif specifier.startswith("@/"):
+        # Common Vite/TS alias where @ maps to repo_root/src.
+        repo_root = importer
+        while (repo_root / ".git").exists() is False and repo_root.parent != repo_root:
+            repo_root = repo_root.parent
+        base = (repo_root / "src" / specifier[2:]).resolve()
+    elif specifier.startswith("src/"):
+        repo_root = importer
+        while (repo_root / ".git").exists() is False and repo_root.parent != repo_root:
+            repo_root = repo_root.parent
+        base = (repo_root / specifier).resolve()
+    else:
         return None
 
-    base = (importer.parent / specifier).resolve()
     candidates = [base]
     for ext in [".ts", ".tsx", ".js", ".jsx"]:
         candidates.append(Path(str(base) + ext))
@@ -230,16 +242,19 @@ def _resolve_import_target(importer: Path, specifier: str) -> Path | None:
 
 
 def _extract_named_import_symbols(statement: str) -> list[str]:
-    m = re.search(r"import\s*\{([^}]*)\}\s*from\s*['\"]([^'\"]+)['\"]", statement, flags=re.DOTALL)
-    if not m:
+    brace_match = re.search(r"\{([^}]*)\}", statement, flags=re.DOTALL)
+    if not brace_match:
         return []
-    raw = m.group(1)
+    raw = brace_match.group(1)
     symbols: list[str] = []
     for piece in raw.split(","):
         part = piece.strip()
         if not part:
             continue
         left = part.split(" as ")[0].strip()
+        left = re.sub(r"^type\s+", "", left)
+        if not left:
+            continue
         symbols.append(left)
     return symbols
 

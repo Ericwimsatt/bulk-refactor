@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 import subprocess
 
-from .agent_runtime import AgentConfig, RefactorAgent, parse_json_response
 from .branch_manager import (
     checkout_branch,
     commit_all,
@@ -14,17 +13,12 @@ from .branch_manager import (
 from .config import WorkflowConfig, detect_typecheck_command
 from .deterministic_refactor import run_deterministic_refactor
 from .file_inventory import find_candidate_files
-from .shell_runner import run_cmd
 from .state_store import create_state
 
 
 def _vlog(cfg: WorkflowConfig, message: str) -> None:
     if cfg.verbose:
         print(f"[oneExportPerFile] {message}")
-
-
-def _load_prompt(prompt_dir: Path, name: str) -> str:
-    return (prompt_dir / name).read_text(encoding="utf-8")
 
 
 def _is_typescript_file(path: str) -> bool:
@@ -82,10 +76,6 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
         state.set_status("dry-run-ready")
         return state.file_path
 
-    _vlog(cfg, f"Initializing review agent with model: {cfg.model_id}")
-    agent = RefactorAgent(AgentConfig(repo_root=repo_root, model_id=cfg.model_id))
-    review_template = _load_prompt(cfg.prompt_dir, "review_changes.txt")
-
     for target_file in candidates:
         _vlog(cfg, f"Processing file: {target_file}")
         state.mark_file(target_file, "started")
@@ -128,30 +118,6 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
             if typecheck_notes:
                 _vlog(cfg, "; ".join(typecheck_notes))
 
-            diff = run_cmd(["git", "diff", "--", "."], cwd=repo_root)
-            _vlog(cfg, "Running agent review on generated diff")
-
-            review_prompt = f"{review_template}\n\nDiff:\n{diff}\n"
-            review_raw = agent.run_prompt(review_prompt)
-            review = parse_json_response(review_raw)
-            approved = bool(review.get("approve", False))
-            reasons = review.get("reasons", [])
-            risks = review.get("risks", [])
-            _vlog(cfg, f"Agent review approved={approved}")
-
-            if not approved:
-                _vlog(cfg, "Agent review rejected changes; pausing for manual review")
-                state.add_branch_record(
-                    branch=branch,
-                    file_path=target_file,
-                    status="manual-review-required",
-                    approved=False,
-                    notes=[*notes, *typecheck_notes, *reasons, *risks],
-                )
-                state.mark_file(target_file, "manual-review-required", branch=branch)
-                state.set_status("paused-for-manual-review")
-                return state.file_path
-
             commit = commit_all(repo_root, f"refactor: one export per file for {target_file}")
             _vlog(cfg, f"Commit created={bool(commit)}")
             state.add_branch_record(
@@ -160,7 +126,7 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
                 status="committed" if commit else "no-changes",
                 commit=commit,
                 approved=True,
-                notes=[*notes, *typecheck_notes, *reasons],
+                notes=[*notes, *typecheck_notes],
             )
             state.mark_file(target_file, "committed" if commit else "no-changes", branch=branch)
             checkout_branch(repo_root, base_branch)

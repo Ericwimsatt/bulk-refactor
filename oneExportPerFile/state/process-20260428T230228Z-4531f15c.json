@@ -1,0 +1,34 @@
+{
+  "base_branch": "main",
+  "branches": [
+    {
+      "approved": true,
+      "branch": "one-export/20260428-230228-src-hooks-usetour-ts",
+      "commit": "c1055b5f567dc2baf13e83fec2635dde5b432a32",
+      "file": "src/hooks/useTour.ts",
+      "notes": [
+        "Processed 2 exports: 1 used (split to wrappers), 1 unused (unexported).",
+        "Typecheck passed: npx tsc --noEmit"
+      ],
+      "status": "committed",
+      "updated_at": "2026-04-28T23:02:34.880205+00:00"
+    }
+  ],
+  "candidates": [
+    "src/hooks/useTour.ts"
+  ],
+  "created_at": "2026-04-28T23:02:28.921657+00:00",
+  "errors": [],
+  "files": {
+    "src/hooks/useTour.ts": {
+      "branch": "one-export/20260428-230228-src-hooks-usetour-ts",
+      "status": "committed",
+      "updated_at": "2026-04-28T23:02:34.885360+00:00"
+    }
+  },
+  "process_id": "20260428T230228Z-4531f15c",
+  "repo_root": "/home/user/git/stemwise",
+  "status": "completed",
+  "target_dir": "src/hooks",
+  "updated_at": "2026-04-28T23:02:34.915224+00:00"
+}
