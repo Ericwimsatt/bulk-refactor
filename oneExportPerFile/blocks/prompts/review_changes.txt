@@ -1,0 +1,17 @@
+You are reviewing a git diff before commit.
+
+Goal:
+Approve only if the diff is safe and behavior-preserving for one-export-per-file refactoring.
+
+Output format:
+Return ONLY valid JSON:
+{
+  "approve": true,
+  "reasons": ["brief reason"],
+  "risks": ["optional risk"]
+}
+
+Rules:
+- approve=true only when changes look safe and coherent.
+- If uncertain, set approve=false and list exact risks.
+- Keep feedback concise and actionable.
