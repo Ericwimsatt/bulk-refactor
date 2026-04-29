@@ -7,6 +7,8 @@ import re
 from .shell_runner import run_cmd
 
 BRANCH_PREFIX = "JediBranch"
+
+
 def get_current_branch(repo_root: Path) -> str:
     return run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
 
@@ -43,3 +45,27 @@ def commit_all(repo_root: Path, message: str) -> str | None:
         return None
     run_cmd(["git", "commit", "-m", message], cwd=repo_root)
     return run_cmd(["git", "rev-parse", "HEAD"], cwd=repo_root)
+
+
+def list_prefixed_branches(repo_root: Path, prefix: str = BRANCH_PREFIX) -> list[str]:
+    branches = run_cmd(
+        ["git", "for-each-ref", "--format=%(refname:short)", "refs/heads"], cwd=repo_root
+    )
+    return [branch for branch in branches.splitlines() if branch.startswith(prefix)]
+
+
+def delete_prefixed_branches(repo_root: Path, prefix: str = BRANCH_PREFIX) -> tuple[list[str], list[str]]:
+    current_branch = get_current_branch(repo_root)
+    candidates = list_prefixed_branches(repo_root, prefix=prefix)
+
+    deleted: list[str] = []
+    skipped: list[str] = []
+
+    for branch in candidates:
+        if branch == current_branch:
+            skipped.append(branch)
+            continue
+        run_cmd(["git", "branch", "-D", branch], cwd=repo_root)
+        deleted.append(branch)
+
+    return deleted, skipped

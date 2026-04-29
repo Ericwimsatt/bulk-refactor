@@ -18,6 +18,7 @@ Refactor JavaScript/TypeScript files to one exported symbol per file.
 ## Layout
 
 - `oneExportPerFile.py`: CLI entrypoint
+- `deleteJediBranches.py`: delete local workflow branches by prefix
 - `blocks/shell/`: reusable shell scripts
 - `blocks/python/`: orchestration + deterministic refactor logic
 - `state/`: process state JSON files
@@ -52,6 +53,17 @@ Execute with detailed progress logs:
 ```bash
 python oneExportPerFile.py -repo /home/user/git/stemwise -dir src/hooks --verbose
 ```
+
+Delete all local workflow branches that start with `BRANCH_PREFIX` (`JediBranch`) in a target repo:
+
+```bash
+python deleteJediBranches.py --repo /home/user/git/stemwise
+```
+
+Notes:
+
+- This only deletes local branches (`refs/heads/*`).
+- The currently checked out branch is skipped automatically.
 
 ## Important Safety Constraint
 
