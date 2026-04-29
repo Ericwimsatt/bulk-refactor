@@ -6,7 +6,7 @@ import re
 
 from .shell_runner import run_cmd
 
-
+BRANCH_PREFIX = "JediBranch"
 def get_current_branch(repo_root: Path) -> str:
     return run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
 
@@ -26,7 +26,7 @@ def _slug(text: str) -> str:
 
 def create_branch(repo_root: Path, base_branch: str, target_file: str) -> str:
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    name = f"one-export/{stamp}-{_slug(target_file)}"
+    name = f"{BRANCH_PREFIX}/one-export/{stamp}-{_slug(target_file)}"
     run_cmd(["git", "checkout", base_branch], cwd=repo_root)
     run_cmd(["git", "checkout", "-b", name], cwd=repo_root)
     return name
