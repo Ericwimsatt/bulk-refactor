@@ -11,7 +11,6 @@ class WorkflowConfig:
     target_dir: str
     state_dir: Path
     max_files: int
-    dry_run: bool
     verbose: bool
 
 

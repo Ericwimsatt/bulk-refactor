@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import subprocess
+import os
 
 from .branch_manager import (
     checkout_branch,
@@ -23,6 +24,34 @@ def _vlog(cfg: WorkflowConfig, message: str) -> None:
 
 def _is_typescript_file(path: str) -> bool:
     return path.endswith(".ts") or path.endswith(".tsx")
+
+
+def _sanitize_filename_for_branch(filename: str) -> str:
+    """Convert a filename to a git branch-safe name."""
+    # Remove directory separators and file extensions
+    name = filename.replace("/", "-").replace("\\", "-")
+    name = name.rsplit(".", 1)[0]  # Remove extension
+    # Keep only alphanumeric, hyphens, underscores
+    name = "".join(c if c.isalnum() or c in "-_" else "-" for c in name)
+    # Remove leading/trailing hyphens
+    name = name.strip("-")
+    return name
+
+
+def _generate_branch_name(repo_root: Path, target_file_rel: str, action: str) -> str:
+    """Generate a git branch name based on the action and target file."""
+    sanitized = _sanitize_filename_for_branch(target_file_rel)
+    
+    action_prefix = {
+        "delete": "delete",
+        "no-new-files": "keep",
+        "shared-split": "split",
+        "shared-split-review": "split-review",
+        "no-action": "no-op",
+    }.get(action, "process")
+    
+    return f"{action_prefix}/{sanitized}"
+
 
 
 def _run_typecheck_if_needed(repo_root: Path, target_file: str) -> tuple[bool, list[str]]:
@@ -61,6 +90,19 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
     state = create_state(cfg.state_dir, repo_root, cfg.target_dir, base_branch)
     _vlog(cfg, f"State file created: {state.file_path}")
 
+    # Ensure Shared folder exists for multi-export splits
+    target_dir_path = (repo_root / cfg.target_dir).resolve()
+    shared_dir = target_dir_path.parent / "Shared"
+    try:
+        shared_dir.mkdir(parents=True, exist_ok=True)
+        _vlog(cfg, f"Shared directory ready: {shared_dir}")
+    except Exception as e:
+        error_msg = f"Failed to create or access Shared directory at {shared_dir}: {e}"
+        _vlog(cfg, error_msg)
+        state.add_error(error_msg)
+        state.set_status("error")
+        return state.file_path
+
     candidates = find_candidate_files(repo_root, cfg.target_dir, cfg.max_files)
     state.data["candidates"] = candidates
     state.save()
@@ -71,26 +113,34 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
         state.set_status("no-op")
         return state.file_path
 
-    if cfg.dry_run:
-        _vlog(cfg, "Dry run requested; saved candidates and exiting")
-        state.set_status("dry-run-ready")
-        return state.file_path
-
     for target_file in candidates:
         _vlog(cfg, f"Processing file: {target_file}")
         state.mark_file(target_file, "started")
-        branch = create_branch(repo_root, base_branch, target_file)
-        state.mark_file(target_file, "branch-created", branch=branch)
-        _vlog(cfg, f"Created and checked out branch: {branch}")
-
+        
         try:
             _vlog(cfg, f"Running deterministic export split for: {target_file}")
-            deterministic = run_deterministic_refactor(repo_root, target_file)
+            deterministic = run_deterministic_refactor(repo_root, target_file, shared_dir)
+            action = deterministic.get("action", "no-action")
             notes = deterministic.get("notes", [])
-            _vlog(cfg, "; ".join(notes) if notes else "Deterministic pass completed")
+            _vlog(cfg, f"Action: {action}; " + "; ".join(notes) if notes else "Deterministic pass completed")
 
+            # Generate branch name based on action
+            branch = _generate_branch_name(repo_root, target_file, action)
+            _vlog(cfg, f"Generated branch name: {branch}")
+            branch = create_branch(repo_root, base_branch, branch)  # create_branch will make it unique if needed
+            state.mark_file(target_file, "branch-created", branch=branch)
+            _vlog(cfg, f"Created and checked out branch: {branch}")
+
+            # Handle file deletion if needed
+            if action == "delete":
+                target_file_path = (repo_root / target_file).resolve()
+                target_file_path.unlink()
+                _vlog(cfg, f"Deleted file: {target_file}")
+                notes.append(f"File deleted: {target_file}")
+
+            # Check for manual review needed
             if deterministic.get("manual_review_required", False):
-                _vlog(cfg, "Deterministic pass requires manual review; pausing")
+                _vlog(cfg, "Manual review required; pausing")
                 state.add_branch_record(
                     branch=branch,
                     file_path=target_file,
@@ -118,7 +168,7 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
             if typecheck_notes:
                 _vlog(cfg, "; ".join(typecheck_notes))
 
-            commit = commit_all(repo_root, f"refactor: one export per file for {target_file}")
+            commit = commit_all(repo_root, f"refactor({target_file}): {action}")
             _vlog(cfg, f"Commit created={bool(commit)}")
             state.add_branch_record(
                 branch=branch,
@@ -134,7 +184,7 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
         except Exception as exc:
             _vlog(cfg, f"Error while processing {target_file}: {exc}")
             state.add_error(f"{target_file}: {exc}")
-            state.mark_file(target_file, "error", branch=branch)
+            state.mark_file(target_file, "error", branch=target_file)
             state.set_status("error")
             return state.file_path
 

@@ -36,12 +36,6 @@ cp .env.example .env
 
 ## Run
 
-Dry run to inspect candidate files:
-
-```bash
-python oneExportPerFile.py -repo /home/user/git/stemwise -dir src/hooks --dry-run
-```
-
 Execute workflow:
 
 ```bash

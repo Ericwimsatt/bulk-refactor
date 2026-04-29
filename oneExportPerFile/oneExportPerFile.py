@@ -15,7 +15,6 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-repo", "--repo", default=".", help="Repo root to refactor")
     parser.add_argument("-dir", "--dir", required=True, help="Target directory inside repo")
     parser.add_argument("--max-files", type=int, default=0, help="Limit number of files (0 = no limit)")
-    parser.add_argument("--dry-run", action="store_true", help="Only build state + candidates")
     parser.add_argument("--verbose", action="store_true", help="Print detailed workflow progress")
     return parser
 
@@ -29,7 +28,6 @@ def main() -> int:
         target_dir=args.dir,
         state_dir=root / "state",
         max_files=args.max_files,
-        dry_run=args.dry_run,
         verbose=args.verbose,
     )
 
