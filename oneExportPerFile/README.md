@@ -19,7 +19,7 @@ Refactor JavaScript/TypeScript files to one exported symbol per file.
 
 - `oneExportPerFile.py`: CLI entrypoint
 - `deleteJediBranches.py`: delete local workflow branches by prefix
-- `blocks/shell/`: reusable shell scripts
+- `blocks/python/shell_runner.py`: centralized subprocess command runner
 - `blocks/python/`: orchestration + deterministic refactor logic
 - `state/`: process state JSON files
 - `logs/`: optional future logs

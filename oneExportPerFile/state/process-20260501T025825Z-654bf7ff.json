@@ -1,0 +1,43 @@
+{
+  "base_branch": "main",
+  "branches": [
+    {
+      "approved": true,
+      "branch": "JediBranch/one-export/20260501-025827-keep-src-hooks-usetour",
+      "commit": "459616f7e9846797f6b593fef964c4ff6c366766",
+      "file": "src/hooks/useTour.ts",
+      "notes": [
+        "Scanned 2 exports: 1 used, 1 unused",
+        "Removed 'export' keyword from 1 unused declarations",
+        "Only 1 used export (useTour); no new files needed",
+        "Typecheck passed: npx tsc --noEmit"
+      ],
+      "status": "committed",
+      "updated_at": "2026-05-01T02:58:29.699099+00:00"
+    }
+  ],
+  "candidates": [
+    "src/hooks/useTour.ts",
+    "src/hooks/useAnalyticsData.ts",
+    "src/hooks/useExpensesData.ts"
+  ],
+  "created_at": "2026-05-01T02:58:25.067457+00:00",
+  "errors": [],
+  "files": {
+    "src/hooks/useAnalyticsData.ts": {
+      "branch": null,
+      "status": "started",
+      "updated_at": "2026-05-01T02:58:29.703943+00:00"
+    },
+    "src/hooks/useTour.ts": {
+      "branch": "JediBranch/one-export/20260501-025827-keep-src-hooks-usetour",
+      "status": "committed",
+      "updated_at": "2026-05-01T02:58:29.699435+00:00"
+    }
+  },
+  "process_id": "20260501T025825Z-654bf7ff",
+  "repo_root": "/home/user/git/stemwise",
+  "status": "started",
+  "target_dir": "src/hooks",
+  "updated_at": "2026-05-01T02:58:25.067472+00:00"
+}
