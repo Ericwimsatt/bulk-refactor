@@ -480,6 +480,143 @@ def _filter_original_imports(import_statements: list[str], used_available: set[s
     return useful
 
 
+def _module_path_without_extension(file_path: Path) -> str:
+    if file_path.suffix in {".ts", ".tsx", ".js", ".jsx"}:
+        return str(file_path.with_suffix(""))
+    return str(file_path)
+
+
+def _build_new_import_specifier(importer: Path, original_specifier: str, destination: Path, repo_root: Path) -> str:
+    destination_no_ext = Path(_module_path_without_extension(destination))
+
+    if original_specifier.startswith("@/"):
+        src_root = repo_root / "src"
+        rel = destination_no_ext.relative_to(src_root).as_posix()
+        return f"@/{rel}"
+
+    if original_specifier.startswith("src/"):
+        rel = destination_no_ext.relative_to(repo_root).as_posix()
+        return rel
+
+    import os
+    rel_spec = os.path.relpath(str(destination_no_ext), start=str(importer.parent)).replace("\\", "/")
+    if not rel_spec.startswith("."):
+        rel_spec = f"./{rel_spec}"
+    return rel_spec
+
+
+def _parse_named_import_entries(statement: str) -> tuple[str, list[tuple[str, str, bool]]]:
+    m = re.search(r"import\s+(.*?)\s+from\s*['\"]", statement, flags=re.DOTALL)
+    if not m:
+        return "", []
+    import_clause = m.group(1).strip()
+    brace_match = re.search(r"\{([^}]*)\}", import_clause, flags=re.DOTALL)
+    if not brace_match:
+        return import_clause, []
+
+    default_part = import_clause[: brace_match.start()].strip().rstrip(",")
+    raw_items = [p.strip() for p in brace_match.group(1).split(",") if p.strip()]
+
+    entries: list[tuple[str, str, bool]] = []
+    for raw in raw_items:
+        is_type = raw.startswith("type ")
+        item = raw[5:].strip() if is_type else raw
+        if " as " in item:
+            imported, local = [p.strip() for p in item.split(" as ", 1)]
+        else:
+            imported, local = item, item
+        entries.append((imported, local, is_type))
+    return default_part, entries
+
+
+def _format_import_entries(entries: list[tuple[str, str, bool]], as_type: bool) -> str:
+    rendered: list[str] = []
+    for imported, local, _ in entries:
+        if imported == local:
+            rendered.append(imported)
+        else:
+            rendered.append(f"{imported} as {local}")
+    kind = "import type" if as_type else "import"
+    return f"{kind} {{ {', '.join(rendered)} }}"
+
+
+def _rewrite_imports_to_split_files(
+    repo_root: Path,
+    target_file: Path,
+    export_by_name: dict[str, ExportDecl],
+    shared_dir: Path,
+) -> tuple[int, list[str]]:
+    pattern = re.compile(r"import\s+[\s\S]*?from\s*['\"]([^'\"]+)['\"]\s*;?", flags=re.MULTILINE)
+    file_changes = 0
+    notes: list[str] = []
+
+    symbol_to_dest = {
+        name: shared_dir / _shared_filename(name, decl.kind)
+        for name, decl in export_by_name.items()
+    }
+
+    for importer in _candidate_source_files(repo_root):
+        if importer.resolve() == target_file.resolve():
+            continue
+        text = importer.read_text(encoding="utf-8")
+        replacements: list[tuple[int, int, str]] = []
+
+        for m in pattern.finditer(text):
+            statement = m.group(0)
+            specifier = m.group(1)
+            resolved = _resolve_import_target(importer, specifier)
+            if not resolved or resolved.resolve() != target_file.resolve():
+                continue
+
+            default_part, entries = _parse_named_import_entries(statement)
+            if not entries:
+                continue
+
+            keep_entries: list[tuple[str, str, bool]] = []
+            moved_by_module_type: dict[tuple[str, bool], list[tuple[str, str, bool]]] = {}
+
+            for imported, local, is_type in entries:
+                dest = symbol_to_dest.get(imported)
+                if not dest:
+                    keep_entries.append((imported, local, is_type))
+                    continue
+                module = _build_new_import_specifier(importer, specifier, dest, repo_root)
+                moved_by_module_type.setdefault((module, is_type), []).append((imported, local, is_type))
+
+            new_lines: list[str] = []
+            if default_part or keep_entries:
+                parts: list[str] = []
+                if default_part:
+                    parts.append(default_part)
+                if keep_entries:
+                    keep_rendered = []
+                    for imported, local, is_type in keep_entries:
+                        prefix = "type " if is_type else ""
+                        if imported == local:
+                            keep_rendered.append(f"{prefix}{imported}")
+                        else:
+                            keep_rendered.append(f"{prefix}{imported} as {local}")
+                    parts.append(f"{{ {', '.join(keep_rendered)} }}")
+                new_lines.append(f"import {', '.join(parts)} from '{specifier}';")
+
+            for (module, as_type), group_entries in sorted(moved_by_module_type.items(), key=lambda x: x[0][0]):
+                new_lines.append(f"{_format_import_entries(group_entries, as_type)} from '{module}';")
+
+            replacement = "\n".join(new_lines)
+            replacements.append((m.start(), m.end(), replacement))
+
+        if not replacements:
+            continue
+
+        new_text = _replace_ranges(text, replacements)
+        if new_text != text:
+            importer.write_text(new_text, encoding="utf-8")
+            file_changes += 1
+
+    notes.append(f"Updated imports in {file_changes} file(s) to use split Shared modules")
+    return file_changes, notes
+
+
 def _run_linter_on_shared_files(shared_dir: Path, repo_root: Path) -> tuple[bool, list[str]]:
     diagnostics: list[str] = []
 
@@ -634,6 +771,21 @@ def _create_shared_exports(
         unresolved = sorted((used_missing - known_symbols) - {decl.name})
         if unresolved:
             missing_deps_list.append(f"{decl.name}: missing {', '.join(unresolved)}")
+
+    rewritten_count, rewrite_notes = _rewrite_imports_to_split_files(
+        repo_root=repo_root,
+        target_file=target_file,
+        export_by_name=export_by_name,
+        shared_dir=shared_dir,
+    )
+    notes.extend(rewrite_notes)
+
+    if rewritten_count == 0:
+        notes.append("No importer files referenced the original module; split files are currently unreferenced")
+
+    if target_file.exists():
+        target_file.unlink()
+        notes.append(f"Deleted original source file after split: {target_file.relative_to(repo_root)}")
 
     lint_ok, lint_notes = _run_linter_on_shared_files(shared_dir, repo_root)
     notes.extend(lint_notes)

@@ -1,0 +1,69 @@
+{
+  "base_branch": "main",
+  "branches": [
+    {
+      "approved": true,
+      "branch": "JediBranch/one-export/20260429-202221-keep-src-hooks-usetour",
+      "commit": "e3ede224b277e1aa12a7e608b470f256716b85e4",
+      "file": "src/hooks/useTour.ts",
+      "notes": [
+        "Scanned 2 exports: 1 used, 1 unused",
+        "Removed 'export' keyword from 1 unused declarations",
+        "Only 1 used export (useTour); no new files needed",
+        "Typecheck passed: npx tsc --noEmit"
+      ],
+      "status": "committed",
+      "updated_at": "2026-04-29T20:22:23.000184+00:00"
+    }
+  ],
+  "candidates": [
+    "src/hooks/useTour.ts",
+    "src/hooks/useAnalyticsData.ts",
+    "src/hooks/useExpensesData.ts",
+    "src/hooks/usePresaleData.ts",
+    "src/hooks/useActiveLots.ts",
+    "src/hooks/usePalmStreetShipping.ts",
+    "src/hooks/useSkuData.ts",
+    "src/hooks/useSourcingData.ts",
+    "src/hooks/useResourcesData.ts",
+    "src/hooks/useAcclimatingData.ts",
+    "src/hooks/useOrdersData.ts",
+    "src/hooks/useOwedToOrders.ts",
+    "src/hooks/useVarietyAliases.ts",
+    "src/hooks/useConversionProfiles.ts",
+    "src/hooks/useFulfillmentData.ts",
+    "src/hooks/useOrderSummariesData.ts",
+    "src/hooks/useFlightDates.ts",
+    "src/hooks/useSupplierCredits.ts",
+    "src/hooks/useSettingsData.ts",
+    "src/hooks/useOrderSummaryDetail.ts",
+    "src/hooks/useInventoryLotsAvg.ts",
+    "src/hooks/use-toast.ts",
+    "src/hooks/usePurchasingData.ts",
+    "src/hooks/useDashboardData.ts",
+    "src/hooks/useOnboarding.ts",
+    "src/hooks/useConsumeLotsForOrderItem.ts",
+    "src/hooks/useCatalogData.ts",
+    "src/hooks/useSupplierData.ts",
+    "src/hooks/useInventoryData.ts"
+  ],
+  "created_at": "2026-04-29T20:22:19.830950+00:00",
+  "errors": [],
+  "files": {
+    "src/hooks/useAnalyticsData.ts": {
+      "branch": null,
+      "status": "started",
+      "updated_at": "2026-04-29T20:22:23.004584+00:00"
+    },
+    "src/hooks/useTour.ts": {
+      "branch": "JediBranch/one-export/20260429-202221-keep-src-hooks-usetour",
+      "status": "committed",
+      "updated_at": "2026-04-29T20:22:23.000460+00:00"
+    }
+  },
+  "process_id": "20260429T202219Z-873334c0",
+  "repo_root": "/home/user/git/stemwise",
+  "status": "started",
+  "target_dir": "src/hooks",
+  "updated_at": "2026-04-29T20:22:19.830966+00:00"
+}
