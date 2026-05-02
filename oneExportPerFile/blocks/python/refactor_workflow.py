@@ -90,14 +90,18 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
     state = create_state(cfg.state_dir, repo_root, cfg.target_dir, base_branch)
     _vlog(cfg, f"State file created: {state.file_path}")
 
-    # Ensure Shared folder exists for multi-export splits
-    target_dir_path = (repo_root / cfg.target_dir).resolve()
-    shared_dir = target_dir_path.parent / "Shared"
+    operation_branch = create_branch(repo_root, base_branch, f"operation-{cfg.target_dir}")
+    state.data["operation_branch"] = operation_branch
+    state.save()
+    _vlog(cfg, f"Created operation branch: {operation_branch}")
+
+    # Ensure shared folder exists on the operation branch for split outputs.
+    shared_dir = (repo_root / "shared").resolve()
     try:
         shared_dir.mkdir(parents=True, exist_ok=True)
-        _vlog(cfg, f"Shared directory ready: {shared_dir}")
+        _vlog(cfg, f"shared directory ready: {shared_dir}")
     except Exception as e:
-        error_msg = f"Failed to create or access Shared directory at {shared_dir}: {e}"
+        error_msg = f"Failed to create or access shared directory at {shared_dir}: {e}"
         _vlog(cfg, error_msg)
         state.add_error(error_msg)
         state.set_status("error")
@@ -127,7 +131,7 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
             # Generate branch name based on action
             branch = _generate_branch_name(repo_root, target_file, action)
             _vlog(cfg, f"Generated branch name: {branch}")
-            branch = create_branch(repo_root, base_branch, branch)  # create_branch will make it unique if needed
+            branch = create_branch(repo_root, operation_branch, branch)  # create_branch will make it unique if needed
             state.mark_file(target_file, "branch-created", branch=branch)
             _vlog(cfg, f"Created and checked out branch: {branch}")
 
@@ -179,8 +183,8 @@ def run_one_export_workflow(cfg: WorkflowConfig) -> Path:
                 notes=[*notes, *typecheck_notes],
             )
             state.mark_file(target_file, "committed" if commit else "no-changes", branch=branch)
-            checkout_branch(repo_root, base_branch)
-            _vlog(cfg, f"Returned to base branch: {base_branch}")
+            checkout_branch(repo_root, operation_branch)
+            _vlog(cfg, f"Returned to operation branch: {operation_branch}")
         except Exception as exc:
             _vlog(cfg, f"Error while processing {target_file}: {exc}")
             state.add_error(f"{target_file}: {exc}")
