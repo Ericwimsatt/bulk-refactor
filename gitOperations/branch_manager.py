@@ -3,8 +3,13 @@ from __future__ import annotations
 from datetime import datetime, UTC
 from pathlib import Path
 import re
+import sys
 
-from .shell_runner import run_cmd
+ONE_EXPORT_ROOT = Path(__file__).resolve().parents[1] / "oneExportPerFile"
+if str(ONE_EXPORT_ROOT) not in sys.path:
+    sys.path.insert(0, str(ONE_EXPORT_ROOT))
+
+from blocks.python.shell_runner import run_cmd
 
 BRANCH_PREFIX = "JediBranch"
 

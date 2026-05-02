@@ -4,7 +4,7 @@ from pathlib import Path
 import subprocess
 import os
 
-from .branch_manager import (
+from gitOperations.branch_manager import (
     checkout_branch,
     commit_all,
     create_branch,

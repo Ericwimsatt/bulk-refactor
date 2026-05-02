@@ -3,8 +3,13 @@ from __future__ import annotations
 
 import argparse
 from pathlib import Path
+import sys
 
-from blocks.python.branch_manager import BRANCH_PREFIX, delete_prefixed_branches
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from gitOperations.branch_manager import BRANCH_PREFIX, delete_prefixed_branches
 
 
 def build_parser() -> argparse.ArgumentParser:
