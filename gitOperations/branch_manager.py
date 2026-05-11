@@ -63,13 +63,13 @@ def delete_prefixed_branches(repo_root: Path, prefix: str = BRANCH_PREFIX) -> tu
     current_branch = get_current_branch(repo_root)
     candidates = list_prefixed_branches(repo_root, prefix=prefix)
 
+    if current_branch in candidates:
+        checkout_branch(repo_root, "main")
+
     deleted: list[str] = []
     skipped: list[str] = []
 
     for branch in candidates:
-        if branch == current_branch:
-            skipped.append(branch)
-            continue
         run_cmd(["git", "branch", "-D", branch], cwd=repo_root)
         deleted.append(branch)
 
