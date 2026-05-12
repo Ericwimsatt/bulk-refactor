@@ -254,7 +254,7 @@ Your task:
 1. Split these exports so that each ends up in its OWN dedicated file with exactly ONE export.
 2. If helpers (types, constants, utilities) are shared by multiple exports, extract those helpers to their own single-export file too — never put multiple exports in one file.
 3. Use the same directory as the original file for all new files.
-4. Name each new file after the symbol it exports (e.g. useGoals → useGoals.ts).
+4. Name each new file after the symbol it exports (e.g. useGoals → useGoals.tsx). If the new filename wouldn't be understandable, add an additional word to make it more specific.
 5. Update every import across the ENTIRE project to point to the new file paths.
 6. The original file may be deleted or reduced to a single export — whatever is cleanest.
 7. Do NOT create any file with more than one export.
