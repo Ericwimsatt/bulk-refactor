@@ -3,13 +3,8 @@ from __future__ import annotations
 from datetime import datetime, UTC
 from pathlib import Path
 import re
-import sys
 
-ONE_EXPORT_ROOT = Path(__file__).resolve().parents[1] / "oneExportPerFile"
-if str(ONE_EXPORT_ROOT) not in sys.path:
-    sys.path.insert(0, str(ONE_EXPORT_ROOT))
-
-from blocks.python.shell_runner import run_cmd
+from oneExportPerFile.blocks.python.shell_runner import run_cmd
 
 BRANCH_PREFIX = "JediBranch"
 
@@ -31,16 +26,28 @@ def _slug(text: str) -> str:
     return slug[:40] if slug else "file"
 
 
-def create_branch(repo_root: Path, base_branch: str, target_file: str) -> str:
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    name = f"{BRANCH_PREFIX}/one-export/{stamp}-{_slug(target_file)}"
-    run_cmd(["git", "checkout", base_branch], cwd=repo_root)
-    run_cmd(["git", "checkout", "-b", name], cwd=repo_root)
-    return name
-
-
 def checkout_branch(repo_root: Path, branch: str) -> None:
     run_cmd(["git", "checkout", branch], cwd=repo_root)
+
+
+def create_branch(repo_root: Path, branch_name: str, base_branch: str) -> None:
+    """Checkout *base_branch*, then create and switch to *branch_name*."""
+    run_cmd(["git", "checkout", base_branch], cwd=repo_root)
+    run_cmd(["git", "checkout", "-b", branch_name], cwd=repo_root)
+
+
+def merge_branch(repo_root: Path, source: str, target: str) -> str:
+    """Merge *source* into *target* with a no-ff merge; return HEAD sha."""
+    run_cmd(["git", "checkout", target], cwd=repo_root)
+    run_cmd(
+        ["git", "merge", "--no-ff", source, "-m", f"Merge {source} into {target}"],
+        cwd=repo_root,
+    )
+    return run_cmd(["git", "rev-parse", "HEAD"], cwd=repo_root)
+
+
+def get_staged_diff(repo_root: Path) -> str:
+    return run_cmd(["git", "diff", "HEAD"], cwd=repo_root)
 
 
 def commit_all(repo_root: Path, message: str) -> str | None:

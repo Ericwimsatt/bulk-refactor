@@ -3,7 +3,7 @@
 oneExportPerFile.py — Refactor a directory so every .ts/.tsx file has exactly one export.
 
 Usage:
-    python oneExportPerFile.py \\
+    python -m oneExportPerFile.oneExportPerFile \\
         --repo /path/to/stemwise \\
         --dir src/hooks \\
         --max-files 5 \\
@@ -27,51 +27,46 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-# ── path setup ────────────────────────────────────────────────────────────────
 JEDI_ROOT = Path(__file__).resolve().parents[1]
-OEPF_ROOT = Path(__file__).resolve().parent
 
-for _p in (str(JEDI_ROOT), str(OEPF_ROOT)):
-    if _p not in sys.path:
-        sys.path.insert(0, _p)
-
-from gitOperations.branch_manager import (  # noqa: E402
+from gitOperations.branch_manager import (  
     BRANCH_PREFIX,
     get_current_branch,
     ensure_clean_worktree,
     checkout_branch,
     commit_all,
+    create_branch,
+    merge_branch,
+    get_staged_diff,
 )
-from blocks.python.shell_runner import run_cmd  # noqa: E402
+from oneExportPerFile.checkIsImportedElsewhere import is_imported_elsewhere
+from oneExportPerFile.runOpenCode import run_opencode
+from oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
 
 # ── constants ─────────────────────────────────────────────────────────────────
 
-# Matches top-level TypeScript declaration-style exports (export function foo, etc.)
-# and captures the exported name in group 1.
-EXPORT_DECL_RE = re.compile(
-    r"^export\s+"
-    r"(?:default\s+)?"
-    r"(?:async\s+)?"
-    r"(?:"
-    r"(?:abstract\s+)?class\s+|"
-    r"function\s*\*?\s*|"
-    r"interface\s+|"
-    r"type\s+|"
-    r"enum\s+|"
-    r"(?:const|let|var)\s+"
-    r")"
-    r"(\w+)",
-    re.MULTILINE,
-)
 
-# Matches  export { Foo, Bar as Baz }  (named group exports, not re-exports from another module)
-# We exclude  export { ... } from '...'  because those are re-exports of another file's symbols.
-EXPORT_BRACE_RE = re.compile(
-    r"^export\s*\{([^}]*)\}(?!\s*from\b)[;]?",
-    re.MULTILINE,
-)
+OPEN_CODE_PROMPT_TEMPLATE = """Refactor the file `{rel_path}` in this TypeScript/React project.
 
+The file currently has {count} top-level exports: {names}.
 
+Your task:
+1. Split these exports so that each ends up in its OWN dedicated file with exactly ONE export.
+2. If helpers (types, constants, utilities) are shared by multiple exports, extract those helpers to their own single-export file too - never put multiple exports in one file.
+3. Use the same directory as the original file for all new files.
+4. Name each new file after the symbol it exports (e.g. useGoals -> useGoals.tsx). If the new filename wouldn't be understandable, add an additional word to make it more specific.
+5. Update every import across the ENTIRE project to point to the new file paths.
+6. The original file may be deleted or reduced to a single export - whatever is cleanest.
+7. Do NOT create any file with more than one export.
+8. Do NOT commit any changes - leave them as uncommitted edits.
+9. After making all changes verify the linter passes by running: bun run lint
+10. Output a brief summary of what files you created/modified when done.
+"""
+    prompt = prompt_template.format(
+        rel_path=rel,
+        count=len(export_names),
+        names=", ".join(export_names),
+    )
 # ── export helpers ────────────────────────────────────────────────────────────
 
 
@@ -133,72 +128,6 @@ def strip_export_keyword(content: str, name: str) -> str:
     return content  # no change
 
 
-# ── import-usage detection ────────────────────────────────────────────────────
-
-
-def is_imported_elsewhere(name: str, repo_root: Path, exclude_file: Path) -> bool:
-    """Return True if *name* appears in an import or re-export in any file other than *exclude_file*.
-
-    Uses grep to locate candidate files quickly, then verifies with a tighter Python regex.
-    """
-    src_dir = repo_root / "src"
-    try:
-        hits_raw = run_cmd(
-            [
-                "grep",
-                "-rl",
-                "--include=*.ts",
-                "--include=*.tsx",
-                f"\\b{name}\\b",
-                str(src_dir),
-            ],
-            cwd=repo_root,
-            check=False,
-        )
-    except Exception:
-        return False
-
-    for hit_path_str in hits_raw.splitlines():
-        candidate = Path(hit_path_str).resolve()
-        if candidate == exclude_file.resolve():
-            continue
-        try:
-            text = candidate.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        # Accept both import and re-export patterns
-        if re.search(
-            rf"(?:import|export)\b[^;]*\b{re.escape(name)}\b",
-            text,
-        ):
-            return True
-
-    return False
-
-
-# ── git helpers ───────────────────────────────────────────────────────────────
-
-
-def create_branch(repo_root: Path, branch_name: str, base_branch: str) -> None:
-    """Checkout *base_branch*, then create and switch to *branch_name*."""
-    run_cmd(["git", "checkout", base_branch], cwd=repo_root)
-    run_cmd(["git", "checkout", "-b", branch_name], cwd=repo_root)
-
-
-def merge_branch(repo_root: Path, source: str, target: str) -> str:
-    """Merge *source* into *target* with a no-ff merge; return the new HEAD sha."""
-    run_cmd(["git", "checkout", target], cwd=repo_root)
-    run_cmd(
-        ["git", "merge", "--no-ff", source, "-m", f"Merge {source} into {target}"],
-        cwd=repo_root,
-    )
-    return run_cmd(["git", "rev-parse", "HEAD"], cwd=repo_root)
-
-
-def get_staged_diff(repo_root: Path) -> str:
-    return run_cmd(["git", "diff", "HEAD"], cwd=repo_root)
-
-
 # ── progress tracking ─────────────────────────────────────────────────────────
 
 
@@ -241,53 +170,6 @@ class ProgressTracker:
             print(f"[{label}]:\n{output}")
         if output:
             self._write(f"\n### {label}\n\n```\n{output}\n```\n\n")
-
-
-# ── opencode integration ──────────────────────────────────────────────────────
-
-
-OPENCODE_PROMPT_TEMPLATE = """Refactor the file `{rel_path}` in this TypeScript/React project.
-
-The file currently has {count} top-level exports: {names}.
-
-Your task:
-1. Split these exports so that each ends up in its OWN dedicated file with exactly ONE export.
-2. If helpers (types, constants, utilities) are shared by multiple exports, extract those helpers to their own single-export file too — never put multiple exports in one file.
-3. Use the same directory as the original file for all new files.
-4. Name each new file after the symbol it exports (e.g. useGoals → useGoals.tsx). If the new filename wouldn't be understandable, add an additional word to make it more specific.
-5. Update every import across the ENTIRE project to point to the new file paths.
-6. The original file may be deleted or reduced to a single export — whatever is cleanest.
-7. Do NOT create any file with more than one export.
-8. Do NOT commit any changes — leave them as uncommitted edits.
-9. After making all changes verify the linter passes by running: bun run lint
-10. Output a brief summary of what files you created/modified when done.
-"""
-
-
-def run_opencode(
-    repo_root: Path,
-    file: Path,
-    export_names: list[str],
-    progress: ProgressTracker,
-) -> None:
-    """Invoke the opencode CLI to split remaining multiple exports in *file*."""
-    rel = file.relative_to(repo_root)
-    prompt = OPENCODE_PROMPT_TEMPLATE.format(
-        rel_path=rel,
-        count=len(export_names),
-        names=", ".join(export_names),
-    )
-    progress.log(f"  Invoking opencode to split {file.name} (exports: {', '.join(export_names)})")
-    try:
-        output = run_cmd(
-            ["opencode", "run", prompt],
-            cwd=repo_root,
-            check=False,
-        )
-        progress.log_output(f"opencode/{file.name}", output)
-        progress.log("  opencode step completed.")
-    except Exception as exc:
-        progress.log(f"  opencode error: {exc}")
 
 
 # ── per-file processing ───────────────────────────────────────────────────────
@@ -346,8 +228,36 @@ def process_file(
     remaining = find_export_names(content)
     progress.log(f"After pass 1: {len(remaining)} export(s) remain — {remaining}")
 
+
     if len(remaining) > 1:
-        run_opencode(repo_root, file, remaining, progress)
+        PROMPT_TEMPLATE = """Refactor the file `{rel_path}` in this TypeScript/React project.
+
+        The file currently has {count} top-level exports: {names}.
+
+        Your task:
+        1. Split these exports so that each ends up in its OWN dedicated file with exactly ONE export.
+        2. If helpers (types, constants, utilities) are shared by multiple exports, extract those helpers to their own single-export file too - never put multiple exports in one file.
+        3. Use the same directory as the original file for all new files.
+        4. Name each new file after the symbol it exports (e.g. useGoals -> useGoals.tsx). If the new filename wouldn't be understandable, add an additional word to make it more specific.
+        5. Update every import across the ENTIRE project to point to the new file paths.
+        6. The original file may be deleted or reduced to a single export - whatever is cleanest.
+        7. Do NOT create any file with more than one export.
+        8. Do NOT commit any changes - leave them as uncommitted edits.
+        9. After making all changes verify the linter passes by running: bun run lint
+        10. Output a brief summary of what files you created/modified when done.
+        """
+        
+        prompt = PROMPT_TEMPLATE.format(
+            rel_path=file.relative_to(repo_root),
+            count=len(export_names),
+            names=", ".join(export_names),
+        )
+
+        run_opencode(
+            repo_root,
+            prompt,
+            progress,
+        )
 
         # Commit whatever opencode changed (it was instructed not to self-commit)
         diff = get_staged_diff(repo_root)
