@@ -43,30 +43,6 @@ from oneExportPerFile.checkIsImportedElsewhere import is_imported_elsewhere
 from oneExportPerFile.runOpenCode import run_opencode
 from oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
 
-# ── constants ─────────────────────────────────────────────────────────────────
-
-
-OPEN_CODE_PROMPT_TEMPLATE = """Refactor the file `{rel_path}` in this TypeScript/React project.
-
-The file currently has {count} top-level exports: {names}.
-
-Your task:
-1. Split these exports so that each ends up in its OWN dedicated file with exactly ONE export.
-2. If helpers (types, constants, utilities) are shared by multiple exports, extract those helpers to their own single-export file too - never put multiple exports in one file.
-3. Use the same directory as the original file for all new files.
-4. Name each new file after the symbol it exports (e.g. useGoals -> useGoals.tsx). If the new filename wouldn't be understandable, add an additional word to make it more specific.
-5. Update every import across the ENTIRE project to point to the new file paths.
-6. The original file may be deleted or reduced to a single export - whatever is cleanest.
-7. Do NOT create any file with more than one export.
-8. Do NOT commit any changes - leave them as uncommitted edits.
-9. After making all changes verify the linter passes by running: bun run lint
-10. Output a brief summary of what files you created/modified when done.
-"""
-    prompt = prompt_template.format(
-        rel_path=rel,
-        count=len(export_names),
-        names=", ".join(export_names),
-    )
 # ── export helpers ────────────────────────────────────────────────────────────
 
 
@@ -246,7 +222,7 @@ def process_file(
         9. After making all changes verify the linter passes by running: bun run lint
         10. Output a brief summary of what files you created/modified when done.
         """
-        
+
         prompt = PROMPT_TEMPLATE.format(
             rel_path=file.relative_to(repo_root),
             count=len(export_names),
