@@ -12,30 +12,35 @@ Usage:
 For each file with multiple exports the script will:
   1. Create a per-file git branch.
   2. Strip 'export' from any declaration that is not imported elsewhere (regex + grep).
-  3. If multiple exports still remain, delegate to the opencode CLI to split them into
-     separate single-export files.
-  4. Commit the result and optionally merge the per-file branch back to the main branch.
+  3. If multiple exports still remain, defer the opencode call to a parallel phase.
+  4. After all deterministic (pass-1) work is done, run all deferred opencode tasks
+     concurrently in a thread pool.
+  5. Once every branch is finished, merge them all back to the main branch together.
 
 Progress is written to jedi/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md.
 """
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
+import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 JEDI_ROOT = Path(__file__).resolve().parents[1]
 
-from gitOperations.branch_manager import (  
+from gitOperations.branch_manager import (
     BRANCH_PREFIX,
     get_current_branch,
     ensure_clean_worktree,
-    checkout_branch,
     commit_all,
-    create_branch,
+    create_branch_with_worktree,
+    remove_worktree,
     merge_branch,
     get_staged_diff,
 )
@@ -104,6 +109,28 @@ def strip_export_keyword(content: str, name: str) -> str:
     return content  # no change
 
 
+# ── task data structures ──────────────────────────────────────────────────────
+
+
+@dataclass
+class AgentTodo:
+    """An opencode task deferred from deterministic pass 1."""
+
+    file: Path
+    file_wt: Path
+    rel: Path
+    export_names: list[str]  # names kept after pass 1 (used in the prompt)
+
+
+@dataclass
+class FileResult:
+    """Tracks the per-file branch created in pass 1, used for merge & cleanup."""
+
+    file: Path
+    file_branch: str
+    file_wt: Path
+
+
 # ── progress tracking ─────────────────────────────────────────────────────────
 
 
@@ -117,14 +144,16 @@ class ProgressTracker:
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.run_dir / "progress.md"
         self.verbose = verbose
+        self._lock = threading.Lock()
         self._write(
             f"# oneExportPerFile run\n\n"
             f"Started: {datetime.now(timezone.utc).isoformat()}\n\n"
         )
 
     def _write(self, text: str) -> None:
-        with self.log_file.open("a", encoding="utf-8") as fh:
-            fh.write(text)
+        with self._lock:
+            with self.log_file.open("a", encoding="utf-8") as fh:
+                fh.write(text)
 
     def log(self, message: str) -> None:
         if self.verbose:
@@ -150,63 +179,7 @@ class ProgressTracker:
 
 # ── per-file processing ───────────────────────────────────────────────────────
 
-
-def process_file(
-    file: Path,
-    repo_root: Path,
-    main_branch: str,
-    run_prefix: str,
-    args: argparse.Namespace,
-    progress: ProgressTracker,
-    summary: dict,
-) -> None:
-    progress.section(f"File: {file.name}")
-
-    content = file.read_text(encoding="utf-8")
-    export_names = find_export_names(content)
-    progress.log(f"Exports found ({len(export_names)}): {export_names}")
-
-    if len(export_names) <= 1:
-        progress.log("Only 1 export — skipping.")
-        summary["skipped"] += 1
-        return
-
-    # ── create per-file branch ────────────────────────────────────────────────
-    # File branches live at run_prefix/{file.stem} (sibling to base, not nested under it)
-    file_branch = f"{run_prefix}/{file.stem}"
-    create_branch(repo_root, file_branch, main_branch)
-    progress.log(f"Created file branch: {file_branch}")
-
-    # ── pass 1: strip 'export' from non-imported symbols ─────────────────────
-    # Re-read content on the new branch (should be identical, but be explicit)
-    content = file.read_text(encoding="utf-8")
-    export_names = find_export_names(content)
-
-    for name in list(export_names):
-        if is_imported_elsewhere(name, repo_root, file):
-            progress.log(f"  '{name}' is imported elsewhere — keeping export.")
-        else:
-            # Safe to remove — nothing outside this file references it
-            content = file.read_text(encoding="utf-8")
-            updated = strip_export_keyword(content, name)
-            if updated == content:
-                progress.log(f"  '{name}' — could not find export declaration to strip (skipping).")
-                continue
-            file.write_text(updated, encoding="utf-8")
-            diff = get_staged_diff(repo_root)
-            sha = commit_all(repo_root, f"Remove unused export '{name}' from {file.name}")
-            progress.log(f"  Removed 'export' from '{name}' — committed {sha or '(nothing staged)'}.")
-            progress.log_diff(diff)
-            export_names.remove(name)
-
-    # ── pass 2: opencode for remaining multiple exports ───────────────────────
-    content = file.read_text(encoding="utf-8")
-    remaining = find_export_names(content)
-    progress.log(f"After pass 1: {len(remaining)} export(s) remain — {remaining}")
-
-
-    if len(remaining) > 1:
-        PROMPT_TEMPLATE = """Refactor the file `{rel_path}` in this TypeScript/React project.
+PROMPT_TEMPLATE = """Refactor the file `{rel_path}` in this TypeScript/React project.
 
         The file currently has {count} top-level exports: {names}.
 
@@ -223,35 +196,120 @@ def process_file(
         10. Output a brief summary of what files you created/modified when done.
         """
 
-        prompt = PROMPT_TEMPLATE.format(
-            rel_path=file.relative_to(repo_root),
-            count=len(export_names),
-            names=", ".join(export_names),
-        )
 
-        run_opencode(
-            repo_root,
-            prompt,
-            progress,
-        )
+def process_file_pass1(
+    file: Path,
+    repo_root: Path,
+    main_branch: str,
+    main_wt: Path,
+    run_prefix: str,
+    args: argparse.Namespace,
+    progress: ProgressTracker,
+    summary: dict,
+    summary_lock: threading.Lock,
+) -> tuple[FileResult | None, AgentTodo | None]:
+    """Run deterministic pass 1 for a file.
 
-        # Commit whatever opencode changed (it was instructed not to self-commit)
-        diff = get_staged_diff(repo_root)
-        sha = commit_all(repo_root, f"Split multiple exports in {file.name} via opencode")
-        if sha:
-            progress.log(f"  Committed opencode changes — {sha}")
-            progress.log_diff(diff)
+    Returns (FileResult, AgentTodo|None).
+    FileResult is None when the file was skipped (≤1 export).
+    AgentTodo is non-None when opencode is still needed after pass 1.
+    """
+    progress.section(f"File: {file.name}")
+
+    # Relative path inside the repo (same in any worktree)
+    rel = file.relative_to(repo_root)
+
+    # Quick pre-check on the main worktree before creating a branch
+    content = (main_wt / rel).read_text(encoding="utf-8")
+    export_names = find_export_names(content)
+    progress.log(f"Exports found ({len(export_names)}): {export_names}")
+
+    if len(export_names) <= 1:
+        progress.log("Only 1 export — skipping.")
+        with summary_lock:
+            summary["skipped"] += 1
+        return None, None
+
+    # ── create per-file branch with its own worktree ──────────────────────────
+    file_branch = f"{run_prefix}/{file.stem}"
+    file_wt = create_branch_with_worktree(repo_root, file_branch, main_branch)
+    progress.log(f"Created file branch: {file_branch} (worktree: {file_wt})")
+
+    wt_file = file_wt / rel
+    file_result = FileResult(file=file, file_branch=file_branch, file_wt=file_wt)
+
+    # ── pass 1: strip 'export' from non-imported symbols ──────────────────────
+    content = wt_file.read_text(encoding="utf-8")
+    export_names = find_export_names(content)
+
+    for name in list(export_names):
+        if is_imported_elsewhere(name, file_wt, wt_file):
+            progress.log(f"  '{name}' is imported elsewhere — keeping export.")
         else:
-            progress.log("  No uncommitted changes after opencode (may have self-committed or no changes).")
+            # Safe to remove — nothing outside this file references it
+            content = wt_file.read_text(encoding="utf-8")
+            updated = strip_export_keyword(content, name)
+            if updated == content:
+                progress.log(f"  '{name}' — could not find export declaration to strip (skipping).")
+                continue
+            wt_file.write_text(updated, encoding="utf-8")
+            diff = get_staged_diff(file_wt)
+            sha = commit_all(file_wt, f"Remove unused export '{name}' from {file.name}")
+            progress.log(f"  Removed 'export' from '{name}' — committed {sha or '(nothing staged)'}.")
+            progress.log_diff(diff)
+            export_names.remove(name)
+
+    # Check what remains after pass 1
+    content = wt_file.read_text(encoding="utf-8")
+    remaining = find_export_names(content)
+    progress.log(f"After pass 1: {len(remaining)} export(s) remain — {remaining}")
+
+    if len(remaining) > 1:
+        # Defer to the parallel opencode phase
+        todo = AgentTodo(file=file, file_wt=file_wt, rel=rel, export_names=export_names)
+        return file_result, todo
+    else:
+        with summary_lock:
+            summary["split"] += 1
+        progress.log(f"Done with {file.name} (no opencode needed).")
+        return file_result, None
+
+
+def process_file_pass2(
+    todo: AgentTodo,
+    progress: ProgressTracker,
+    summary: dict,
+    summary_lock: threading.Lock,
+) -> None:
+    """Run the opencode pass for a single file. Designed to run in a thread pool."""
+    file = todo.file
+    file_wt = todo.file_wt
+    rel = todo.rel
+    export_names = todo.export_names
+
+    progress.section(f"OpenCode: {file.name}")
+
+    prompt = PROMPT_TEMPLATE.format(
+        rel_path=rel,
+        count=len(export_names),
+        names=", ".join(export_names),
+    )
+
+    run_opencode(file_wt, prompt, progress)
+
+    # Commit whatever opencode changed (it was instructed not to self-commit)
+    diff = get_staged_diff(file_wt)
+    sha = commit_all(file_wt, f"Split multiple exports in {file.name} via opencode")
+    if sha:
+        progress.log(f"  Committed opencode changes — {sha}")
+        progress.log_diff(diff)
+    else:
+        progress.log("  No uncommitted changes after opencode (may have self-committed or no changes).")
+
+    with summary_lock:
         summary["opencode_used"] = summary.get("opencode_used", 0) + 1
+        summary["split"] += 1
 
-    # ── optional: merge file branch back to main branch ───────────────────────
-    if args.merge_file_branches:
-        sha = merge_branch(repo_root, file_branch, main_branch)
-        progress.log(f"Merged {file_branch} → {main_branch} (sha: {sha})")
-        summary["merged"] += 1
-
-    summary["split"] += 1
     progress.log(f"Done with {file.name}.")
 
 
@@ -313,15 +371,13 @@ def main() -> int:
 
     progress.log(f"Original branch: {original_branch}")
 
-    # ── create main oneExportPerFile branch ───────────────────────────────────
-    # Note: file branches are nested as  .../run/{stamp}/{file.stem}
-    #       so the run base is           .../run/{stamp}/base
-    #       to avoid the git "file vs directory" naming conflict.
+    # ── create main oneExportPerFile branch with its own worktree ──────────────
     stamp = datetime.now(timezone.utc).strftime("%H%M%S-%Y%m%d")
     run_prefix = f"{BRANCH_PREFIX}/oneExportPerFile/{stamp}"
     main_branch = f"{run_prefix}/base"
-    create_branch(repo_root, main_branch, original_branch)
+    main_wt = create_branch_with_worktree(repo_root, main_branch, original_branch)
     progress.log(f"Main branch:     {main_branch}")
+    progress.log(f"Main worktree:   {main_wt}")
 
     # ── collect target files ──────────────────────────────────────────────────
     files: list[Path] = sorted(
@@ -336,36 +392,82 @@ def main() -> int:
         "split": 0,
         "merged": 0,
         "errors": 0,
+        "opencode_used": 0,
     }
+    summary_lock = threading.Lock()
 
-    # ── process each file ─────────────────────────────────────────────────────
+    # ── phase 1: deterministic pass-1 processing (sequential) ────────────────
+    progress.section("Phase 1: Deterministic processing")
+    file_results: list[FileResult] = []
+    agent_todo: list[AgentTodo] = []
+
     for file in files:
         try:
-            process_file(file, repo_root, main_branch, run_prefix, args, progress, summary)
+            file_result, todo = process_file_pass1(
+                file, repo_root, main_branch, main_wt,
+                run_prefix, args, progress, summary, summary_lock,
+            )
+            if file_result is not None:
+                file_results.append(file_result)
+            if todo is not None:
+                agent_todo.append(todo)
         except Exception as exc:
             progress.log(f"ERROR processing {file.name}: {exc}")
             if args.verbose:
                 import traceback
                 traceback.print_exc()
-            summary["errors"] += 1
-            # Attempt recovery: return to main branch so we can keep going
-            try:
-                checkout_branch(repo_root, main_branch)
-            except Exception:
-                pass
+            with summary_lock:
+                summary["errors"] += 1
 
-    # ── return to original branch ─────────────────────────────────────────────
-    try:
-        checkout_branch(repo_root, original_branch)
-        progress.log(f"Returned to original branch: {original_branch}")
-    except Exception as exc:
-        progress.log(f"Warning: could not return to {original_branch}: {exc}")
+    # ── phase 2: parallel opencode ────────────────────────────────────────────
+    if agent_todo:
+        max_workers = min(len(agent_todo), os.cpu_count() or 4)
+        progress.section(f"Phase 2: Parallel OpenCode ({len(agent_todo)} tasks, {max_workers} workers)")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(process_file_pass2, todo, progress, summary, summary_lock): todo
+                for todo in agent_todo
+            }
+            for future in as_completed(futures):
+                todo = futures[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    progress.log(f"ERROR in opencode for {todo.file.name}: {exc}")
+                    if args.verbose:
+                        import traceback
+                        traceback.print_exc()
+                    with summary_lock:
+                        summary["errors"] += 1
+
+    # ── phase 3: merge all file branches back to main ─────────────────────────
+    if args.merge_file_branches and file_results:
+        progress.section("Phase 3: Merging all file branches")
+        for fr in file_results:
+            try:
+                sha = merge_branch(main_wt, fr.file_branch)
+                progress.log(f"Merged {fr.file_branch} → {main_branch} (sha: {sha})")
+                with summary_lock:
+                    summary["merged"] += 1
+            except Exception as exc:
+                progress.log(f"ERROR merging {fr.file_branch}: {exc}")
+                if args.verbose:
+                    import traceback
+                    traceback.print_exc()
+                with summary_lock:
+                    summary["errors"] += 1
+
+    # ── phase 4: remove all worktrees ─────────────────────────────────────────
+    progress.section("Phase 4: Cleanup")
+    for fr in file_results:
+        try:
+            remove_worktree(repo_root, fr.file_wt)
+            progress.log(f"Removed worktree: {fr.file_wt}")
+        except Exception as exc:
+            progress.log(f"Warning: could not remove worktree {fr.file_wt}: {exc}")
 
     # ── final summary ─────────────────────────────────────────────────────────
-    # Include opencode_used in summary dict so it logs once
-    if "opencode_used" not in summary:
-        summary["opencode_used"] = 0
-
     progress.section("Summary")
     for k, v in summary.items():
         progress.log(f"{k}: {v}")

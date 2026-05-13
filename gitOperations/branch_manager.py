@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from datetime import datetime, UTC
 from pathlib import Path
 import re
 
-from oneExportPerFile.blocks.python.shell_runner import run_cmd
+from oneExportPerFile.shell_runner import run_cmd
 
 BRANCH_PREFIX = "JediBranch"
 
@@ -26,24 +25,67 @@ def _slug(text: str) -> str:
     return slug[:40] if slug else "file"
 
 
+def _worktree_base(repo_root: Path) -> Path:
+    """Root directory for all jedi-managed worktrees for the given repo."""
+    return repo_root.parent / ".jedi-worktrees" / repo_root.name
+
+
 def checkout_branch(repo_root: Path, branch: str) -> None:
     run_cmd(["git", "checkout", branch], cwd=repo_root)
 
 
-def create_branch(repo_root: Path, branch_name: str, base_branch: str) -> None:
-    """Checkout *base_branch*, then create and switch to *branch_name*."""
-    run_cmd(["git", "checkout", base_branch], cwd=repo_root)
-    run_cmd(["git", "checkout", "-b", branch_name], cwd=repo_root)
+def create_branch_with_worktree(repo_root: Path, branch_name: str, base_branch: str) -> Path:
+    """Create *branch_name* starting at *base_branch* and attach a git worktree.
 
-
-def merge_branch(repo_root: Path, source: str, target: str) -> str:
-    """Merge *source* into *target* with a no-ff merge; return HEAD sha."""
-    run_cmd(["git", "checkout", target], cwd=repo_root)
+    The worktree is placed under ``_worktree_base(repo_root)`` using a
+    directory-safe name (``/`` replaced by ``--``).  Returns the worktree path.
+    """
+    sanitized = branch_name.replace("/", "--")
+    worktree_path = _worktree_base(repo_root) / sanitized
+    worktree_path.parent.mkdir(parents=True, exist_ok=True)
     run_cmd(
-        ["git", "merge", "--no-ff", source, "-m", f"Merge {source} into {target}"],
+        ["git", "worktree", "add", "-b", branch_name, str(worktree_path), base_branch],
         cwd=repo_root,
     )
-    return run_cmd(["git", "rev-parse", "HEAD"], cwd=repo_root)
+    return worktree_path
+
+
+def remove_worktree(repo_root: Path, worktree_path: Path) -> None:
+    """Forcibly remove the git worktree at *worktree_path*."""
+    run_cmd(["git", "worktree", "remove", "--force", str(worktree_path)], cwd=repo_root)
+
+
+def list_jedi_worktrees(repo_root: Path, prefix: str = BRANCH_PREFIX) -> list[Path]:
+    """Return paths of all worktrees whose checked-out branch starts with *prefix*."""
+    # Prune stale entries first so we only see live worktrees.
+    run_cmd(["git", "worktree", "prune"], cwd=repo_root)
+    output = run_cmd(["git", "worktree", "list", "--porcelain"], cwd=repo_root)
+    result: list[Path] = []
+    current_path: Path | None = None
+    for line in output.splitlines():
+        if line.startswith("worktree "):
+            current_path = Path(line[len("worktree "):])
+        elif line.startswith("branch "):
+            branch_ref = line[len("branch "):]
+            branch_name = branch_ref.removeprefix("refs/heads/")
+            if branch_name.startswith(prefix) and current_path is not None:
+                result.append(current_path)
+            current_path = None
+        elif line == "":
+            current_path = None
+    return result
+
+
+def merge_branch(target_wt: Path, source: str) -> str:
+    """Merge *source* branch into the branch checked out at *target_wt*.
+
+    Uses ``--no-ff`` to preserve history.  Returns HEAD sha after merge.
+    """
+    run_cmd(
+        ["git", "merge", "--no-ff", source, "-m", f"Merge {source}"],
+        cwd=target_wt,
+    )
+    return run_cmd(["git", "rev-parse", "HEAD"], cwd=target_wt)
 
 
 def get_staged_diff(repo_root: Path) -> str:
