@@ -178,26 +178,7 @@ class ProgressTracker:
 
 
 # ── per-file processing ───────────────────────────────────────────────────────
-
-PROMPT_TEMPLATE = """Refactor the file `{rel_path}` in this TypeScript/React project.
-
-        The file currently has {count} top-level exports: {names}.
-
-        Your task:
-        1. Split these exports so that each ends up in its OWN dedicated file with exactly ONE export.
-        2. If helpers (types, constants, utilities) are shared by multiple exports, extract those helpers to their own single-export file too - never put multiple exports in one file.
-        3. Use the same directory as the original file for all new files.
-        4. Name each new file after the symbol it exports (e.g. useGoals -> useGoals.tsx). If the new filename wouldn't be understandable, add an additional word to make it more specific.
-        5. Update every import across the ENTIRE project to point to the new file paths.
-        6. The original file may be deleted or reduced to a single export - whatever is cleanest.
-        7. Do NOT create any file with more than one export.
-        8. Do NOT commit any changes - leave them as uncommitted edits.
-        9. After making all changes verify the linter passes by running: bun run lint
-        10. Output a brief summary of what files you created/modified when done.
-        """
-
-
-def process_file_pass1(
+def remove_unused_exports(
     file: Path,
     repo_root: Path,
     main_branch: str,
@@ -238,7 +219,7 @@ def process_file_pass1(
     wt_file = file_wt / rel
     file_result = FileResult(file=file, file_branch=file_branch, file_wt=file_wt)
 
-    # ── pass 1: strip 'export' from non-imported symbols ──────────────────────
+    # deterministically strip 'export' from non-imported symbols ──────────────────────
     content = wt_file.read_text(encoding="utf-8")
     export_names = find_export_names(content)
 
@@ -265,7 +246,7 @@ def process_file_pass1(
     progress.log(f"After pass 1: {len(remaining)} export(s) remain — {remaining}")
 
     if len(remaining) > 1:
-        # Defer to the parallel opencode phase
+        # Use coding agent for more complex task
         todo = AgentTodo(file=file, file_wt=file_wt, rel=rel, export_names=export_names)
         return file_result, todo
     else:
@@ -275,7 +256,7 @@ def process_file_pass1(
         return file_result, None
 
 
-def process_file_pass2(
+def split_exports_to_separate_files(
     todo: AgentTodo,
     progress: ProgressTracker,
     summary: dict,
@@ -289,6 +270,22 @@ def process_file_pass2(
 
     progress.section(f"OpenCode: {file.name}")
 
+    PROMPT_TEMPLATE = """Refactor the file `{rel_path}` in this TypeScript/React project.
+
+        The file currently has {count} top-level exports: {names}.
+
+        Your task:
+        1. Split these exports so that each ends up in its OWN dedicated file with exactly ONE export.
+        2. If helpers (types, constants, utilities) are shared by multiple exports, extract those helpers to their own single-export file too - never put multiple exports in one file.
+        3. Use the same directory as the original file for all new files.
+        4. Name each new file after the symbol it exports (e.g. useGoals -> useGoals.tsx). If the new filename wouldn't be understandable, add an additional word to make it more specific.
+        5. Update every import across the ENTIRE project to point to the new file paths.
+        6. The original file may be deleted or reduced to a single export - whatever is cleanest.
+        7. Do NOT create any file with more than one export.
+        8. Do NOT commit any changes - leave them as uncommitted edits.
+        9. After making all changes verify the linter passes by running: bun run lint
+        10. Output a brief summary of what files you created/modified when done.
+        """
     prompt = PROMPT_TEMPLATE.format(
         rel_path=rel,
         count=len(export_names),
@@ -311,6 +308,65 @@ def process_file_pass2(
         summary["split"] += 1
 
     progress.log(f"Done with {file.name}.")
+
+def process_all_files(
+    files: list[Path],
+    repo_root: Path,
+    main_branch: str,
+    main_wt: Path,
+    run_prefix: str,
+    args: argparse.Namespace,
+    progress: ProgressTracker,
+    summary: dict,
+    summary_lock: threading.Lock,
+) -> list[FileResult]:
+
+    # ── phase 1: deterministic pass-1 processing (sequential) ────────────────
+    progress.section("Phase 1: Deterministic processing")
+    file_results: list[FileResult] = []
+    agent_todo: list[AgentTodo] = []
+
+    for file in files:
+        try:
+            file_result, todo = remove_unused_exports(
+                file, repo_root, main_branch, main_wt,
+                run_prefix, args, progress, summary, summary_lock,
+            )
+            if file_result is not None:
+                file_results.append(file_result)
+            if todo is not None:
+                agent_todo.append(todo)
+        except Exception as exc:
+            progress.log(f"ERROR processing {file.name}: {exc}")
+            if args.verbose:
+                import traceback
+                traceback.print_exc()
+            with summary_lock:
+                summary["errors"] += 1
+
+    # ── phase 2: parallel opencode ────────────────────────────────────────────
+    if agent_todo:
+        max_workers = min(len(agent_todo), os.cpu_count() or 4)
+        progress.section(f"Phase 2: Parallel OpenCode ({len(agent_todo)} tasks, {max_workers} workers)")
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {
+                executor.submit(split_exports_to_separate_files, todo, progress, summary, summary_lock): todo
+                for todo in agent_todo
+            }
+            for future in as_completed(futures):
+                todo = futures[future]
+                try:
+                    future.result()
+                except Exception as exc:
+                    progress.log(f"ERROR in opencode for {todo.file.name}: {exc}")
+                    if args.verbose:
+                        import traceback
+                        traceback.print_exc()
+                    with summary_lock:
+                        summary["errors"] += 1
+
+    return file_results
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -395,53 +451,11 @@ def main() -> int:
         "opencode_used": 0,
     }
     summary_lock = threading.Lock()
-
-    # ── phase 1: deterministic pass-1 processing (sequential) ────────────────
-    progress.section("Phase 1: Deterministic processing")
-    file_results: list[FileResult] = []
-    agent_todo: list[AgentTodo] = []
-
-    for file in files:
-        try:
-            file_result, todo = process_file_pass1(
-                file, repo_root, main_branch, main_wt,
-                run_prefix, args, progress, summary, summary_lock,
-            )
-            if file_result is not None:
-                file_results.append(file_result)
-            if todo is not None:
-                agent_todo.append(todo)
-        except Exception as exc:
-            progress.log(f"ERROR processing {file.name}: {exc}")
-            if args.verbose:
-                import traceback
-                traceback.print_exc()
-            with summary_lock:
-                summary["errors"] += 1
-
-    # ── phase 2: parallel opencode ────────────────────────────────────────────
-    if agent_todo:
-        max_workers = min(len(agent_todo), os.cpu_count() or 4)
-        progress.section(f"Phase 2: Parallel OpenCode ({len(agent_todo)} tasks, {max_workers} workers)")
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(process_file_pass2, todo, progress, summary, summary_lock): todo
-                for todo in agent_todo
-            }
-            for future in as_completed(futures):
-                todo = futures[future]
-                try:
-                    future.result()
-                except Exception as exc:
-                    progress.log(f"ERROR in opencode for {todo.file.name}: {exc}")
-                    if args.verbose:
-                        import traceback
-                        traceback.print_exc()
-                    with summary_lock:
-                        summary["errors"] += 1
-
-    # ── phase 3: merge all file branches back to main ─────────────────────────
+    file_results = process_all_files(
+        files, repo_root, main_branch, main_wt,
+        run_prefix, args, progress, summary, summary_lock,
+    )
+    # ── merge all file branches back to main ─────────────────────────
     if args.merge_file_branches and file_results:
         progress.section("Phase 3: Merging all file branches")
         for fr in file_results:
