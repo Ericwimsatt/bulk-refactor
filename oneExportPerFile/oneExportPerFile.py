@@ -19,6 +19,7 @@ For each file with multiple exports the script will:
 
 Progress is written to jedi/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -92,10 +93,7 @@ def strip_export_keyword(content: str, name: str) -> str:
     def _remove_from_brace(m: re.Match) -> str:
         items = [i.strip() for i in m.group(1).split(",") if i.strip()]
         # Remove the item that exports `name` (matches "name" or "localName as name")
-        filtered = [
-            i for i in items
-            if re.split(r"\bas\b", i)[-1].strip() != name
-        ]
+        filtered = [i for i in items if re.split(r"\bas\b", i)[-1].strip() != name]
         if not filtered:
             return ""  # remove entire export { } line
         return f"export {{ {', '.join(filtered)} }};"
@@ -231,12 +229,16 @@ def remove_unused_exports(
             content = wt_file.read_text(encoding="utf-8")
             updated = strip_export_keyword(content, name)
             if updated == content:
-                progress.log(f"  '{name}' — could not find export declaration to strip (skipping).")
+                progress.log(
+                    f"  '{name}' — could not find export declaration to strip (skipping)."
+                )
                 continue
             wt_file.write_text(updated, encoding="utf-8")
             diff = get_staged_diff(file_wt)
             sha = commit_all(file_wt, f"Remove unused export '{name}' from {file.name}")
-            progress.log(f"  Removed 'export' from '{name}' — committed {sha or '(nothing staged)'}.")
+            progress.log(
+                f"  Removed 'export' from '{name}' — committed {sha or '(nothing staged)'}."
+            )
             progress.log_diff(diff)
             export_names.remove(name)
 
@@ -301,13 +303,16 @@ def split_exports_to_separate_files(
         progress.log(f"  Committed opencode changes — {sha}")
         progress.log_diff(diff)
     else:
-        progress.log("  No uncommitted changes after opencode (may have self-committed or no changes).")
+        progress.log(
+            "  No uncommitted changes after opencode (may have self-committed or no changes)."
+        )
 
     with summary_lock:
         summary["opencode_used"] = summary.get("opencode_used", 0) + 1
         summary["split"] += 1
 
     progress.log(f"Done with {file.name}.")
+
 
 def process_all_files(
     files: list[Path],
@@ -329,8 +334,15 @@ def process_all_files(
     for file in files:
         try:
             file_result, todo = remove_unused_exports(
-                file, repo_root, main_branch, main_wt,
-                run_prefix, args, progress, summary, summary_lock,
+                file,
+                repo_root,
+                main_branch,
+                main_wt,
+                run_prefix,
+                args,
+                progress,
+                summary,
+                summary_lock,
             )
             if file_result is not None:
                 file_results.append(file_result)
@@ -340,6 +352,7 @@ def process_all_files(
             progress.log(f"ERROR processing {file.name}: {exc}")
             if args.verbose:
                 import traceback
+
                 traceback.print_exc()
             with summary_lock:
                 summary["errors"] += 1
@@ -347,11 +360,19 @@ def process_all_files(
     # ── phase 2: parallel opencode ────────────────────────────────────────────
     if agent_todo:
         max_workers = min(len(agent_todo), os.cpu_count() or 4)
-        progress.section(f"Phase 2: Parallel OpenCode ({len(agent_todo)} tasks, {max_workers} workers)")
+        progress.section(
+            f"Phase 2: Parallel OpenCode ({len(agent_todo)} tasks, {max_workers} workers)"
+        )
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
-                executor.submit(split_exports_to_separate_files, todo, progress, summary, summary_lock): todo
+                executor.submit(
+                    split_exports_to_separate_files,
+                    todo,
+                    progress,
+                    summary,
+                    summary_lock,
+                ): todo
                 for todo in agent_todo
             }
             for future in as_completed(futures):
@@ -362,6 +383,7 @@ def process_all_files(
                     progress.log(f"ERROR in opencode for {todo.file.name}: {exc}")
                     if args.verbose:
                         import traceback
+
                         traceback.print_exc()
                     with summary_lock:
                         summary["errors"] += 1
@@ -388,7 +410,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         metavar="N",
-        help="Process at most N files (useful for testing)",
+        help="Process at most N files",
     )
     p.add_argument("--verbose", action="store_true", help="Print progress to stdout")
     p.add_argument(
@@ -452,8 +474,15 @@ def main() -> int:
     }
     summary_lock = threading.Lock()
     file_results = process_all_files(
-        files, repo_root, main_branch, main_wt,
-        run_prefix, args, progress, summary, summary_lock,
+        files,
+        repo_root,
+        main_branch,
+        main_wt,
+        run_prefix,
+        args,
+        progress,
+        summary,
+        summary_lock,
     )
     # ── merge all file branches back to main ─────────────────────────
     if args.merge_file_branches and file_results:
@@ -468,6 +497,7 @@ def main() -> int:
                 progress.log(f"ERROR merging {fr.file_branch}: {exc}")
                 if args.verbose:
                     import traceback
+
                     traceback.print_exc()
                 with summary_lock:
                     summary["errors"] += 1
