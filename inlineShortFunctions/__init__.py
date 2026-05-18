@@ -1,0 +1,1 @@
+"""inlineShortFunctions automation package."""

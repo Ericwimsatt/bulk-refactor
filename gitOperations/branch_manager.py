@@ -12,8 +12,13 @@ def get_current_branch(repo_root: Path) -> str:
     return run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo_root)
 
 
+def get_git_root(repo_path: Path) -> Path:
+    """Return the actual git repository root for any path within the repo."""
+    return Path(run_cmd(["git", "rev-parse", "--show-toplevel"], cwd=repo_path))
+
+
 def ensure_clean_worktree(repo_root: Path) -> None:
-    status = run_cmd(["git", "status", "--porcelain"], cwd=repo_root)
+    status = run_cmd(["git", "status", "--porcelain", "--untracked-files=no"], cwd=repo_root)
     if status:
         raise RuntimeError(
             "Working tree is not clean. Commit or stash changes before running this workflow."
