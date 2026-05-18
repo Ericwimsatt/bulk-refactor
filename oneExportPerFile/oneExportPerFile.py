@@ -121,7 +121,7 @@ class AgentTodo:
 
 
 @dataclass
-class FileResult:
+class FileBranchData:
     """Tracks the per-file branch created in pass 1, used for merge & cleanup."""
 
     file: Path
@@ -186,11 +186,11 @@ def remove_unused_exports(
     progress: ProgressTracker,
     summary: dict,
     summary_lock: threading.Lock,
-) -> tuple[FileResult | None, AgentTodo | None]:
+) -> tuple[FileBranchData | None, AgentTodo | None]:
     """Run deterministic pass 1 for a file.
 
-    Returns (FileResult, AgentTodo|None).
-    FileResult is None when the file was skipped (≤1 export).
+    Returns (FileBranchData, AgentTodo|None).
+    FileBranchData is None when the file was skipped (≤1 export).
     AgentTodo is non-None when opencode is still needed after pass 1.
     """
     progress.section(f"File: {file.name}")
@@ -215,7 +215,7 @@ def remove_unused_exports(
     progress.log(f"Created file branch: {file_branch} (worktree: {file_wt})")
 
     wt_file = file_wt / rel
-    file_result = FileResult(file=file, file_branch=file_branch, file_wt=file_wt)
+    file_branch_data = FileBranchData(file=file, file_branch=file_branch, file_wt=file_wt)
 
     # deterministically strip 'export' from non-imported symbols ──────────────────────
     content = wt_file.read_text(encoding="utf-8")
@@ -250,12 +250,12 @@ def remove_unused_exports(
     if len(remaining) > 1:
         # Use coding agent for more complex task
         todo = AgentTodo(file=file, file_wt=file_wt, rel=rel, export_names=export_names)
-        return file_result, todo
+        return file_branch_data, todo
     else:
         with summary_lock:
             summary["split"] += 1
         progress.log(f"Done with {file.name} (no opencode needed).")
-        return file_result, None
+        return file_branch_data, None
 
 
 def split_exports_to_separate_files(
@@ -324,16 +324,16 @@ def process_all_files(
     progress: ProgressTracker,
     summary: dict,
     summary_lock: threading.Lock,
-) -> list[FileResult]:
+) -> list[FileBranchData]:
 
     # ── phase 1: deterministic pass-1 processing (sequential) ────────────────
     progress.section("Phase 1: Deterministic processing")
-    file_results: list[FileResult] = []
+    file_branch_datas: list[FileBranchData] = []
     agent_todo: list[AgentTodo] = []
 
     for file in files:
         try:
-            file_result, todo = remove_unused_exports(
+            file_branch_data, todo = remove_unused_exports(
                 file,
                 repo_root,
                 main_branch,
@@ -344,8 +344,8 @@ def process_all_files(
                 summary,
                 summary_lock,
             )
-            if file_result is not None:
-                file_results.append(file_result)
+            if file_branch_data is not None:
+                file_branch_datas.append(file_branch_data)
             if todo is not None:
                 agent_todo.append(todo)
         except Exception as exc:
@@ -388,7 +388,7 @@ def process_all_files(
                     with summary_lock:
                         summary["errors"] += 1
 
-    return file_results
+    return file_branch_datas
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -473,7 +473,7 @@ def main() -> int:
         "opencode_used": 0,
     }
     summary_lock = threading.Lock()
-    file_results = process_all_files(
+    file_branch_datas = process_all_files(
         files,
         repo_root,
         main_branch,
@@ -485,9 +485,9 @@ def main() -> int:
         summary_lock,
     )
     # ── merge all file branches back to main ─────────────────────────
-    if args.merge_file_branches and file_results:
+    if args.merge_file_branches and file_branch_datas:
         progress.section("Phase 3: Merging all file branches")
-        for fr in file_results:
+        for fr in file_branch_datas:
             try:
                 sha = merge_branch(main_wt, fr.file_branch)
                 progress.log(f"Merged {fr.file_branch} → {main_branch} (sha: {sha})")
@@ -504,7 +504,7 @@ def main() -> int:
 
     # ── phase 4: remove all worktrees ─────────────────────────────────────────
     progress.section("Phase 4: Cleanup")
-    for fr in file_results:
+    for fr in file_branch_datas:
         try:
             remove_worktree(repo_root, fr.file_wt)
             progress.log(f"Removed worktree: {fr.file_wt}")

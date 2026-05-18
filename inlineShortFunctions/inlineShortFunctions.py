@@ -120,7 +120,7 @@ class AgentTodo:
 
 
 @dataclass
-class FileResult:
+class FileBranchData:
     """Tracks the per-file branch created for merging."""
 
     source_file: Path
@@ -258,49 +258,65 @@ def _apply_inline(
 
 
 def inline_via_opencode(
-    todo: AgentTodo,
+    todos: list[AgentTodo],
     progress: ProgressTracker,
     summary: dict,
     summary_lock: threading.Lock,
 ) -> None:
-    """Run opencode to inline a single FunctionTarget. Designed for thread pool use."""
-    target = todo.target
-    # Relative paths are the same in the worktree as in the original repo
-    source_rel = todo.source_wt_file.relative_to(todo.wt_root)
-    caller_rel = todo.caller_wt_file.relative_to(todo.wt_root)
+    """Run one opencode call to inline multiple FunctionTarget values in the same worktree."""
+    if not todos:
+        return
 
-    progress.section(f"OpenCode: inline '{target.name}' ({target.body_lines} lines)")
+    wt_root = todos[0].wt_root
+    source_rel = todos[0].source_wt_file.relative_to(wt_root)
+
+    progress.section(
+        f"OpenCode batch: {source_rel} ({len(todos)} function(s))"
+    )
+
+    task_lines: list[str] = []
+    for idx, todo in enumerate(todos, start=1):
+        target = todo.target
+        caller_rel = todo.caller_wt_file.relative_to(wt_root)
+        task_lines.append(
+            f"{idx}. `{target.name}` ({target.body_lines} body lines) from `{source_rel}` "
+            f"into `{caller_rel}`"
+        )
 
     INLINE_PROMPT_TEMPLATE = """\
-    Inline the function `{name}` from `{source_rel}` into `{caller_rel}`.
+    Inline all of the following exported functions in one pass:
+
+    {tasks}
 
     Context:
-    - `{name}` is defined in `{source_rel}` and is ONLY used in `{caller_rel}`.
-    - The goal is to eliminate the indirection: move the logic directly into the call site(s) in `{caller_rel}`.
+    - Every listed function is defined in `{source_rel}`.
+    - Each listed function is only used in its listed caller file.
+    - Goal: remove indirection by inlining each function directly into its call sites.
 
-    Steps to perform:
-    1. In `{caller_rel}`, find every place that calls or uses `{name}`.
-    2. Replace each usage with the equivalent inline code (copy/expand the function body, substituting arguments for parameters where needed).
-    3. Remove the import statement for `{name}` from `{caller_rel}`.
-    4. In `{source_rel}`, delete the `{name}` function/export entirely.
-    5. If `{source_rel}` becomes empty (or only has unused imports), delete the file.
+    Steps to perform for EACH listed function:
+    1. In the listed caller file, find every usage/call of the function.
+    2. Replace each usage with equivalent inline logic (including parameter/argument substitution as needed).
+    3. Remove the function import from that caller file.
+    4. Delete the function/export from `{source_rel}`.
+
+    After processing all listed functions:
+    5. If `{source_rel}` becomes empty (or only has unused imports), delete it.
     6. Update any other imports across the project if needed.
     7. Do NOT commit changes — leave them as uncommitted edits.
-    8. After making all changes, verify the linter passes by running: bun run lint
-    9. Output a brief summary of what you changed.
+    8. Verify lint passes by running: bun run lint
+    9. Output a brief summary of what changed per function.
     """
-    
-    prompt = INLINE_PROMPT_TEMPLATE.format(
-        name=target.name,
-        source_rel=source_rel,
-        caller_rel=caller_rel,
-    )
-    run_opencode(todo.wt_root, prompt, progress)
 
-    diff = get_staged_diff(todo.wt_root)
+    prompt = INLINE_PROMPT_TEMPLATE.format(
+        tasks="\n".join(task_lines),
+        source_rel=source_rel,
+    )
+    run_opencode(wt_root, prompt, progress)
+
+    diff = get_staged_diff(wt_root)
     sha = commit_all(
-        todo.wt_root,
-        f"Inline '{target.name}' from {source_rel.name} into {caller_rel.name} via opencode",
+        wt_root,
+        f"Inline {len(todos)} function(s) from {source_rel.name} via opencode",
     )
     if sha:
         progress.log(f"  Committed opencode changes — {sha}")
@@ -310,9 +326,12 @@ def inline_via_opencode(
 
     with summary_lock:
         summary["opencode_used"] = summary.get("opencode_used", 0) + 1
-        summary["inlined"] += 1
+        summary["inlined"] += len(todos)
 
-    progress.log(f"Done inlining '{target.name}'.")
+    progress.log(
+        "Done inlining batch: "
+        + ", ".join(f"'{todo.target.name}'" for todo in todos)
+    )
 
 
 
@@ -331,7 +350,7 @@ def process_source_file(
     progress: ProgressTracker,
     summary: dict,
     summary_lock: threading.Lock,
-) -> tuple[FileResult | None, list[AgentTodo]]:
+) -> tuple[FileBranchData | None, list[AgentTodo]]:
     """Process all single-use export targets from one source file.
 
     Pass 1 (deterministic): try to inline short functions directly.
@@ -350,7 +369,7 @@ def process_source_file(
 
     # Paths inside the worktree are relative to the git root, not repo_root
     rel_source = source_file.relative_to(git_root)
-    file_result = FileResult(source_file=source_file, file_branch=file_branch, file_wt=file_wt)
+    file_branch_data = FileBranchData(source_file=source_file, file_branch=file_branch, file_wt=file_wt)
     agent_todos: list[AgentTodo] = []
 
     for target in targets_for_file:
@@ -396,7 +415,7 @@ def process_source_file(
             )
         )
 
-    return file_result, agent_todos
+    return file_branch_data, agent_todos
 
 
 # ── orchestration ─────────────────────────────────────────────────────────────
@@ -413,7 +432,7 @@ def process_all(
     progress: ProgressTracker,
     summary: dict,
     summary_lock: threading.Lock,
-) -> list[FileResult]:
+) -> list[FileBranchData]:
     """Orchestrate pass-1 (deterministic) and pass-2 (opencode) across all targets."""
 
     # Group targets by source file
@@ -424,12 +443,12 @@ def process_all(
 
     # ── Phase 1: deterministic pass (sequential) ──────────────────────────────
     progress.section("Phase 1: Deterministic inlining")
-    file_results: list[FileResult] = []
+    file_branch_datas: list[FileBranchData] = []
     all_agent_todos: list[AgentTodo] = []
 
     for source_file, file_targets in by_source.items():
         try:
-            file_result, agent_todos = process_source_file(
+            file_branch_data, agent_todos = process_source_file(
                 source_file,
                 file_targets,
                 repo_root,
@@ -442,8 +461,8 @@ def process_all(
                 summary,
                 summary_lock,
             )
-            if file_result is not None:
-                file_results.append(file_result)
+            if file_branch_data is not None:
+                file_branch_datas.append(file_branch_data)
             all_agent_todos.extend(agent_todos)
         except Exception as exc:
             progress.log(f"ERROR processing {source_file.name}: {exc}")
@@ -455,8 +474,7 @@ def process_all(
 
     # ── Phase 2: parallel opencode ────────────────────────────────────────────
     if all_agent_todos:
-        # Group todos by worktree: todos that share a worktree must run sequentially
-        # to avoid git conflicts, but groups with different worktrees run in parallel.
+        # One opencode call per worktree/source file, with all deferred functions batched.
         from collections import defaultdict as _dd
         todos_by_wt: dict[Path, list[AgentTodo]] = _dd(list)
         for todo in all_agent_todos:
@@ -470,8 +488,7 @@ def process_all(
         )
 
         def _run_wt_group(todos: list[AgentTodo]) -> None:
-            for todo in todos:
-                inline_via_opencode(todo, progress, summary, summary_lock)
+            inline_via_opencode(todos, progress, summary, summary_lock)
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = {
@@ -495,7 +512,7 @@ def process_all(
                     with summary_lock:
                         summary["errors"] += 1
 
-    return file_results
+    return file_branch_datas
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
@@ -630,7 +647,7 @@ def main() -> int:
     # Remap target paths to the main worktree so scanning used the right source
     # (targets were discovered from the original working tree; we just keep paths)
 
-    file_results = process_all(
+    file_branch_datas = process_all(
         targets,
         repo_root,
         git_root,
@@ -644,9 +661,9 @@ def main() -> int:
     )
 
     # ── merge all per-file branches back to the main branch ───────────────────
-    if args.merge_file_branches and file_results:
+    if args.merge_file_branches and file_branch_datas:
         progress.section("Phase 3: Merging all file branches")
-        for fr in file_results:
+        for fr in file_branch_datas:
             try:
                 sha = merge_branch(main_wt, fr.file_branch)
                 progress.log(f"Merged {fr.file_branch} → {main_branch}  (sha: {sha})")
