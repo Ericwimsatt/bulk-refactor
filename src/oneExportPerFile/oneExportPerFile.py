@@ -441,14 +441,14 @@ def main() -> int:
     # ── merge all file branches back to main ─────────────────────────
     if args.merge_file_branches and file_branch_datas:
         progress.section("Phase 3: Merging all file branches")
-        for fr in file_branch_datas:
+        for branch_data in file_branch_datas:
             try:
-                sha = merge_branch(main_wt, fr.file_branch, source_wt=fr.file_wt)
-                progress.log(f"Merged {fr.file_branch} → {main_branch} (sha: {sha})")
+                sha = merge_branch(main_wt, branch_data.file_branch, source_wt=branch_data.file_wt)
+                progress.log(f"Merged {branch_data.file_branch} → {main_branch} (sha: {sha})")
                 with summary_lock:
                     summary["merged"] += 1
             except Exception as exc:
-                progress.log(f"ERROR merging {fr.file_branch}: {exc}")
+                progress.log(f"ERROR merging {branch_data.file_branch}: {exc}")
                 if args.verbose:
                     import traceback
 
