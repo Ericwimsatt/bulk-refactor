@@ -10,6 +10,7 @@ def run_cmd(
     cwd: Path | None = None,
     check: bool = True,
     capture: bool = True,
+    env: dict | None = None,
 ) -> str:
     """Run *cmd* and return stripped stdout.
 
@@ -20,6 +21,7 @@ def run_cmd(
         cwd=str(cwd) if cwd else None,
         capture_output=capture,
         text=True,
+        env=env,
     )
     if check and result.returncode != 0:
         raise RuntimeError(
