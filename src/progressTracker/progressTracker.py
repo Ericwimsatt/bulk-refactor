@@ -5,14 +5,17 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+JEDI_ROOT = Path(__file__).resolve().parents[2]
+
 
 class ProgressTracker:
     """Append-only progress logger used across automation scripts."""
 
-    def __init__(self, jedi_root: Path, run_name: str, verbose: bool = False) -> None:
+    def __init__(self, run_name: str, verbose: bool = False) -> None:
+        print(JEDI_ROOT)
         ts = datetime.now(timezone.utc).strftime("%H%M%S_%Y%m%d")
         uid = uuid.uuid4().hex[:8]
-        self.run_dir = jedi_root / "Progress" / f"process_{ts}_{uid}"
+        self.run_dir = JEDI_ROOT / "Progress" / f"process_{ts}_{uid}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.run_dir / "progress.md"
         self.verbose = verbose
@@ -47,3 +50,4 @@ class ProgressTracker:
             print(f"[{label}]:\n{output}")
         if output:
             self._write(f"\n### {label}\n\n```\n{output}\n```\n\n")
+

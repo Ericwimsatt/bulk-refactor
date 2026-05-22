@@ -37,8 +37,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-JEDI_ROOT = Path(__file__).resolve().parents[1]
-
 from gitOperations.branch_manager import (
     BRANCH_PREFIX,
     get_current_branch,
@@ -536,7 +534,7 @@ def main() -> int:
         scan_dir = repo_root / "src" if (repo_root / "src").is_dir() else repo_root
 
     # ── initialise progress ───────────────────────────────────────────────────
-    progress = ProgressTracker(JEDI_ROOT, run_name="inlineShortFunctions", verbose=args.verbose)
+    progress = ProgressTracker(run_name="inlineShortFunctions", verbose=args.verbose)
     progress.log(f"repo:             {repo_root}")
     progress.log(f"scan dir:         {scan_dir}")
     progress.log(f"short-threshold:  {args.short_threshold}")

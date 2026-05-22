@@ -56,8 +56,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-JEDI_ROOT = Path(__file__).resolve().parents[1]
-
 from gitOperations.branch_manager import (
     BRANCH_PREFIX,
     get_current_branch,
@@ -473,7 +471,7 @@ def main() -> int:
         return 1
 
     # ── initialise progress tracker ───────────────────────────────────────────
-    progress = ProgressTracker(JEDI_ROOT, run_name="SplitLargeComponent", verbose=args.verbose)
+    progress = ProgressTracker(run_name="SplitLargeComponent", verbose=args.verbose)
     progress.log(f"repo:              {repo_root}")
     progress.log(f"target:            {target_label}")
     progress.log(f"components-dir:    {args.components_dir}")
