@@ -67,7 +67,7 @@ from gitOperations.branch_manager import (
     merge_branch,
     get_staged_diff,
 )
-from oneExportPerFile.runOpenCode import run_opencode
+from agents.runOpenCode import run_opencode
 from progressTracker.progressTracker import ProgressTracker
 
 
@@ -252,7 +252,6 @@ def split_component(
     file = todo.file
     file_wt = todo.file_wt
     rel = todo.rel
-    rel_repo = todo.rel_repo
     repo_subdir = todo.repo_subdir
     reasons = todo.reasons
     components_dir_rel = todo.components_dir_rel
