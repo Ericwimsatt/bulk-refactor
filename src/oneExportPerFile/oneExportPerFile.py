@@ -43,7 +43,7 @@ from gitOperations.branch_manager import (
     get_staged_diff,
 )
 from oneExportPerFile.checkIsImportedElsewhere import is_imported_elsewhere
-from oneExportPerFile.runOpenCode import run_opencode
+from agents.runOpenCode import run_opencode
 from oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
 from progressTracker.progressTracker import ProgressTracker
 
