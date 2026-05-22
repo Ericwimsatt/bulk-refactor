@@ -1,0 +1,1 @@
+Remove the AgentTodo dataclass. Can be uniform and just pass the prompt in
