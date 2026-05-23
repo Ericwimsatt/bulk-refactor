@@ -1,0 +1,1 @@
+"""collectPageSpecificFiles automation package."""

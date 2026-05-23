@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "inlineShortFunctions: manhunt/lib",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "inlineShortFunctions.inlineShortFunctions",
+      "cwd": "${workspaceFolder:jedi}/src",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder:jedi}/src"
+      },
+      "args": [
+        "--repo",
+        "/Users/ericwimsatt/git/manhunt/manhunt-app",
+        "--dir",
+        "lib",
+        "--short-threshold",
+        "3",
+        "--verbose"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}
