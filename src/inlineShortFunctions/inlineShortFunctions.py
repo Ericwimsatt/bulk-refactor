@@ -48,7 +48,7 @@ from gitOperations.branch_manager import (
     merge_branch,
     get_staged_diff,
 )
-from oneExportPerFile.runOpenCode import run_opencode
+from agents.runOpenCode import run_opencode
 from inlineShortFunctions.findSingleUseExports import (
     FunctionTarget,
     find_single_use_exports,
