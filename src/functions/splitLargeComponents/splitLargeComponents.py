@@ -56,9 +56,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from gitOperations.branch_manager import (
+from lib.gitOperations.file_branch_data import FileBranchData
+from lib.gitOperations.branch_manager import (
     BRANCH_PREFIX,
-    FileBranchData,
     get_current_branch,
     get_git_root,
     ensure_clean_worktree,
@@ -68,8 +68,8 @@ from gitOperations.branch_manager import (
     merge_branch,
     get_staged_diff,
 )
-from agents.runOpenCode import run_opencode
-from progressTracker.progressTracker import ProgressTracker
+from lib.agents.runOpenCode import run_opencode
+from lib.progressTracker.progressTracker import ProgressTracker
 
 
 # ── heuristic scanner ─────────────────────────────────────────────────────────

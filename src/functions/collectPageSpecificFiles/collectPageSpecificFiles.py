@@ -3,7 +3,7 @@
 collectPageSpecificFiles.py — Move page-specific files from a shared directory into the page's own folder.
 
 Usage:
-    python -m collectPageSpecificFiles.collectPageSpecificFiles \\
+    python -m functions.collectPageSpecificFiles.collectPageSpecificFiles \\
         --repo /path/to/repo \\
         --roots-dir app \\
         --target-dir components \\
@@ -33,7 +33,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from gitOperations.branch_manager import (
+from lib.gitOperations.branch_manager import (
     BRANCH_PREFIX,
     get_current_branch,
     get_git_root,
@@ -43,8 +43,8 @@ from gitOperations.branch_manager import (
     remove_worktree,
     get_staged_diff,
 )
-from oneExportPerFile.shell_runner import run_cmd
-from progressTracker.progressTracker import ProgressTracker
+from functions.oneExportPerFile.shell_runner import run_cmd
+from lib.progressTracker.progressTracker import ProgressTracker
 
 # ── import resolution ─────────────────────────────────────────────────────────
 
@@ -377,8 +377,9 @@ def main() -> int:
     try:
         ensure_clean_worktree(repo_root)
     except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+        warning = f"Warning: {exc} Proceeding anyway because this workflow uses an isolated worktree."
+        print(warning, file=sys.stderr)
+        progress.log(warning)
 
     progress.log(f"Original branch: {original_branch}")
 

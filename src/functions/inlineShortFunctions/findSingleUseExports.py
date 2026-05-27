@@ -6,8 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from oneExportPerFile.shell_runner import run_cmd
-from oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
+from functions.oneExportPerFile.shell_runner import run_cmd
+from functions.oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
 
 
 # ── data classes ──────────────────────────────────────────────────────────────

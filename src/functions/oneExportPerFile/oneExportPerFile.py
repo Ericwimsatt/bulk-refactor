@@ -3,7 +3,7 @@
 oneExportPerFile.py — Refactor a directory so every .ts/.tsx file has exactly one export.
 
 Usage:
-    python -m oneExportPerFile.oneExportPerFile \\
+    python -m functions.oneExportPerFile.oneExportPerFile \\
         --repo /path/to/stemwise \\
         --dir src/hooks \\
         --max-files 5 \\
@@ -32,9 +32,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from gitOperations.branch_manager import (
+from lib.gitOperations.file_branch_data import FileBranchData
+from lib.gitOperations.branch_manager import (
     BRANCH_PREFIX,
-    FileBranchData,
     get_current_branch,
     ensure_clean_worktree,
     commit_all,
@@ -43,10 +43,10 @@ from gitOperations.branch_manager import (
     merge_branch,
     get_staged_diff,
 )
-from oneExportPerFile.checkIsImportedElsewhere import is_imported_elsewhere
-from agents.runOpenCode import run_opencode
-from oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
-from progressTracker.progressTracker import ProgressTracker
+from functions.oneExportPerFile.checkIsImportedElsewhere import is_imported_elsewhere
+from lib.agents.runOpenCode import run_opencode
+from functions.oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
+from lib.progressTracker.progressTracker import ProgressTracker
 
 # ── export helpers ────────────────────────────────────────────────────────────
 

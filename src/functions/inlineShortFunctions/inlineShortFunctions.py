@@ -3,7 +3,7 @@
 inlineShortFunctions.py — Inline exported functions that are only used in one other file.
 
 Usage:
-    python -m inlineShortFunctions.inlineShortFunctions \\
+    python -m functions.inlineShortFunctions.inlineShortFunctions \\
         --repo /path/to/repo \\
         --dir src/lib \\
         --short-threshold 3 \\
@@ -37,9 +37,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
-from gitOperations.branch_manager import (
+from lib.gitOperations.file_branch_data import FileBranchData
+from lib.gitOperations.branch_manager import (
     BRANCH_PREFIX,
-    FileBranchData,
     get_current_branch,
     get_git_root,
     ensure_clean_worktree,
@@ -49,13 +49,13 @@ from gitOperations.branch_manager import (
     merge_branch,
     get_staged_diff,
 )
-from agents.runOpenCode import run_opencode
-from inlineShortFunctions.findSingleUseExports import (
+from lib.agents.runOpenCode import run_opencode
+from functions.inlineShortFunctions.findSingleUseExports import (
     FunctionTarget,
     find_single_use_exports,
     extract_function_bounds,
 )
-from progressTracker.progressTracker import ProgressTracker
+from lib.progressTracker.progressTracker import ProgressTracker
 
 
 # ── data structures ───────────────────────────────────────────────────────────
@@ -539,8 +539,9 @@ def main() -> int:
     try:
         ensure_clean_worktree(repo_root)
     except RuntimeError as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+        warning = f"Warning: {exc} Proceeding anyway because this workflow uses isolated worktrees."
+        print(warning, file=sys.stderr)
+        progress.log(warning)
     # Resolve the actual git root (may differ if --repo is a subdirectory)
     git_root = get_git_root(repo_root)
     progress.log(f"Original branch: {original_branch}")
