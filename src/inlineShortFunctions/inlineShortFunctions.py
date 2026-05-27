@@ -39,6 +39,7 @@ from pathlib import Path
 
 from gitOperations.branch_manager import (
     BRANCH_PREFIX,
+    FileBranchData,
     get_current_branch,
     get_git_root,
     ensure_clean_worktree,
@@ -69,15 +70,6 @@ class AgentTodo:
     caller_wt_file: Path   # path to caller file inside the worktree
     wt_root: Path          # worktree root
     repo_root: Path        # original repo root (for relative path computation)
-
-
-@dataclass
-class FileBranchData:
-    """Tracks the per-file branch created for merging."""
-
-    source_file: Path
-    file_branch: str
-    file_wt: Path
 
 
 # ── deterministic inlining ────────────────────────────────────────────────────
@@ -321,7 +313,7 @@ def process_source_file(
 
     # Paths inside the worktree are relative to the git root, not repo_root
     rel_source = source_file.relative_to(git_root)
-    file_branch_data = FileBranchData(source_file=source_file, file_branch=file_branch, file_wt=file_wt)
+    file_branch_data = FileBranchData(file=source_file, file_branch=file_branch, file_wt=file_wt)
     agent_todos: list[AgentTodo] = []
 
     for target in targets_for_file:

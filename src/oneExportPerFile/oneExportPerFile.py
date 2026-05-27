@@ -34,6 +34,7 @@ from pathlib import Path
 
 from gitOperations.branch_manager import (
     BRANCH_PREFIX,
+    FileBranchData,
     get_current_branch,
     ensure_clean_worktree,
     commit_all,
@@ -116,15 +117,6 @@ class AgentTodo:
     file_wt: Path
     rel: Path
     export_names: list[str]  # names kept after pass 1 (used in the prompt)
-
-
-@dataclass
-class FileBranchData:
-    """Tracks the per-file branch created in pass 1, used for merge & cleanup."""
-
-    file: Path
-    file_branch: str
-    file_wt: Path
 
 
 # ── per-file processing ───────────────────────────────────────────────────────

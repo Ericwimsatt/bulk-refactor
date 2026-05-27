@@ -1,11 +1,21 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import re
 
 from oneExportPerFile.shell_runner import run_cmd
 
 BRANCH_PREFIX = "JediBranch"
+
+
+@dataclass
+class FileBranchData:
+    """Tracks a per-file branch/worktree pair used by refactor workflows."""
+
+    file: Path
+    file_branch: str
+    file_wt: Path
 
 
 def get_current_branch(repo_root: Path) -> str:

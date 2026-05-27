@@ -58,6 +58,7 @@ from pathlib import Path
 
 from gitOperations.branch_manager import (
     BRANCH_PREFIX,
+    FileBranchData,
     get_current_branch,
     get_git_root,
     ensure_clean_worktree,
@@ -137,15 +138,6 @@ class AgentTodo:
     repo_subdir: Path  # repo_root.relative_to(git_root); the subdir within the worktree
     reasons: list[str]
     components_dir_rel: str  # relative path from repo root to components dir
-
-
-@dataclass
-class FileBranchData:
-    """Tracks the per-file branch created in pass 1, used for merge & cleanup."""
-
-    file: Path
-    file_branch: str
-    file_wt: Path
 
 
 # ── per-file processing ───────────────────────────────────────────────────────
