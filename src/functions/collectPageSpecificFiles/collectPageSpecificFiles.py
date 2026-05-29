@@ -30,11 +30,10 @@ from __future__ import annotations
 import argparse
 import re
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 from lib.gitOperations.branch_manager import (
-    BRANCH_PREFIX,
+    build_main_branch_names,
     get_current_branch,
     get_git_root,
     ensure_clean_worktree,
@@ -388,9 +387,7 @@ def main() -> int:
     progress.log(f"git_root:                 {git_root}")
 
     # ── create main branch + worktree ─────────────────────────────────────────
-    stamp = datetime.now(timezone.utc).strftime("%H%M%S-%Y%m%d")
-    run_prefix = f"{BRANCH_PREFIX}/collectPageSpecificFiles/{stamp}"
-    main_branch = f"{run_prefix}/base"
+    run_prefix, main_branch = build_main_branch_names("collectPageSpecificFiles")
     main_wt = create_branch_with_worktree(repo_root, main_branch, original_branch)
     progress.log(f"Main branch:   {main_branch}")
     progress.log(f"Main worktree: {main_wt}")

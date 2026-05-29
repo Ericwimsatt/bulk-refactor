@@ -29,12 +29,11 @@ import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 from lib.gitOperations.file_branch_data import FileBranchData
 from lib.gitOperations.branch_manager import (
-    BRANCH_PREFIX,
+    build_main_branch_names,
     get_current_branch,
     ensure_clean_worktree,
     commit_all,
@@ -394,9 +393,7 @@ def main() -> int:
     progress.log(f"Original branch: {original_branch}")
 
     # ── create main oneExportPerFile branch with its own worktree ──────────────
-    stamp = datetime.now(timezone.utc).strftime("%H%M%S-%Y%m%d")
-    run_prefix = f"{BRANCH_PREFIX}/oneExportPerFile/{stamp}"
-    main_branch = f"{run_prefix}/base"
+    run_prefix, main_branch = build_main_branch_names("oneExportPerFile")
     main_wt = create_branch_with_worktree(repo_root, main_branch, original_branch)
     progress.log(f"Main branch:     {main_branch}")
     progress.log(f"Main worktree:   {main_wt}")
