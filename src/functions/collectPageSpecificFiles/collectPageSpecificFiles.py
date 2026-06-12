@@ -32,7 +32,7 @@ import re
 import sys
 from pathlib import Path
 
-from lib.gitOperations.branch_manager import (
+from utils.gitOperations.branch_manager import (
     build_main_branch_names,
     get_current_branch,
     get_git_root,
@@ -43,7 +43,7 @@ from lib.gitOperations.branch_manager import (
     get_staged_diff,
 )
 from functions.oneExportPerFile.shell_runner import run_cmd
-from lib.progressTracker.progressTracker import ProgressTracker
+from utils.progressTracker.progressTracker import ProgressTracker
 
 # ── import resolution ─────────────────────────────────────────────────────────
 

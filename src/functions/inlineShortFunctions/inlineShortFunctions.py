@@ -36,8 +36,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from lib.gitOperations.file_branch_data import FileBranchData
-from lib.gitOperations.branch_manager import (
+from utils.gitOperations.file_branch_data import FileBranchData
+from utils.gitOperations.branch_manager import (
     build_main_branch_names,
     get_current_branch,
     get_git_root,
@@ -48,13 +48,13 @@ from lib.gitOperations.branch_manager import (
     merge_branch,
     get_staged_diff,
 )
-from lib.agents.runOpenCode import run_opencode
+from utils.agents.runOpenCode import run_opencode
 from functions.inlineShortFunctions.findSingleUseExports import (
     FunctionTarget,
     find_single_use_exports,
     extract_function_bounds,
 )
-from lib.progressTracker.progressTracker import ProgressTracker
+from utils.progressTracker.progressTracker import ProgressTracker
 
 
 # ── data structures ───────────────────────────────────────────────────────────

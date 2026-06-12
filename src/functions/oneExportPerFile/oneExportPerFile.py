@@ -31,8 +31,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
-from lib.gitOperations.file_branch_data import FileBranchData
-from lib.gitOperations.branch_manager import (
+from utils.gitOperations.file_branch_data import FileBranchData
+from utils.gitOperations.branch_manager import (
     build_main_branch_names,
     get_current_branch,
     ensure_clean_worktree,
@@ -43,9 +43,9 @@ from lib.gitOperations.branch_manager import (
     get_staged_diff,
 )
 from functions.oneExportPerFile.checkIsImportedElsewhere import is_imported_elsewhere
-from lib.agents.runOpenCode import run_opencode
+from utils.agents.runOpenCode import run_opencode
 from functions.oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
-from lib.progressTracker.progressTracker import ProgressTracker
+from utils.progressTracker.progressTracker import ProgressTracker
 
 # ── export helpers ────────────────────────────────────────────────────────────
 

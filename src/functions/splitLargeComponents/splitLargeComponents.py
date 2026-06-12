@@ -55,8 +55,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 
-from lib.gitOperations.file_branch_data import FileBranchData
-from lib.gitOperations.branch_manager import (
+from utils.gitOperations.file_branch_data import FileBranchData
+from utils.gitOperations.branch_manager import (
     build_main_branch_names,
     get_current_branch,
     get_git_root,
@@ -67,8 +67,8 @@ from lib.gitOperations.branch_manager import (
     merge_branch,
     get_staged_diff,
 )
-from lib.agents.runOpenCode import run_opencode
-from lib.progressTracker.progressTracker import ProgressTracker
+from utils.agents.runOpenCode import run_opencode
+from utils.progressTracker.progressTracker import ProgressTracker
 
 
 # ── heuristic scanner ─────────────────────────────────────────────────────────
