@@ -1,9 +1,9 @@
-# jedi
+# bulk-refactor
 Tools to make similar changes to many files across a repo. 
 Tries to use deterministic string manipulation and falls back to agent calls to complete tasks.
 
 # setup
-Jedi makes calls to the OpenCode cli. OpenCode terminal must be installed on the machine before using Jedi.
+bulk-refactor makes calls to the OpenCode cli. OpenCode terminal must be installed on the machine before using bulk-refactor.
 https://opencode.ai/download
 
 # Example Usage
@@ -29,14 +29,14 @@ python -m tasks.oneExportPerFile.oneExportPerFile \
   --verbose
 ```
 
-Progress is written to `jedi/src/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md`.
+Progress is written to `bulk-refactor/src/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md`.
 
 ---
 
 Split large components first, then collect the resulting page-specific files into their page folders:
 
 ```bash
-cd /path/to/jedi/src
+cd /path/to/bulk-refactor/src
 
 python -m tasks.splitLargeComponents.splitLargeComponents \
   --repo /path/to/manhunt/manhunt-app \
@@ -84,12 +84,12 @@ Inexpensive/free models are sufficient. The tasks are simple enough with enough 
 
 
 # Progress tracking
-The function runs can take a long time. Progress is tracked in a decicated folder per run in the jedi/Progress folder.
+The function runs can take a long time. Progress is tracked in a decicated folder per run in the bulk-refactor/Progress folder.
 
 # Branch management
-Each Jedi call will create at least one new branch, often multiple branches. It will automatically clean them up at the end of the runs if the merge branches flag is set to true.
+Each bulk-refactor call will create at least one new branch, often multiple branches. It will automatically clean them up at the end of the runs if the merge branches flag is set to true.
 
 ```bash
-cd /path/to/jedi/src
-python -m lib.gitOperations.deleteJediBranches --repo /path/to/manhunt/manhunt-app
+cd /path/to/bulk-refactor/src
+python -m utils.gitOperations.deleteBulkRefactorBranches --repo /path/to/manhunt/manhunt-app
 ```
