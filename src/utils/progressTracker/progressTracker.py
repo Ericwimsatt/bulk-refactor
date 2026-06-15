@@ -5,6 +5,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from utils.format_timestamp import format_timestamp
+
 JEDI_ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -13,7 +15,7 @@ class ProgressTracker:
 
     def __init__(self, run_name: str, verbose: bool = False) -> None:
         print(JEDI_ROOT)
-        ts = datetime.now(timezone.utc).strftime("%H%M%S_%Y%m%d")
+        ts = format_timestamp()
         uid = uuid.uuid4().hex[:8]
         self.run_dir = JEDI_ROOT / "Progress" / f"process_{ts}_{uid}"
         self.run_dir.mkdir(parents=True, exist_ok=True)

@@ -5,20 +5,9 @@ from pathlib import Path
 import re
 
 from functions.oneExportPerFile.shell_runner import run_cmd
+from utils.format_timestamp import format_timestamp
 
 BRANCH_PREFIX = "JediBranch"
-
-
-def format_branch_timestamp(now: datetime | None = None) -> str:
-    """Return a readable local timestamp for branch names.
-
-    Format example: ``5.29.2026_4.32.12PM``
-    Uses dots instead of colons because ``:`` is not valid in git ref names.
-    """
-    now = now or datetime.now().astimezone()
-    hour_12 = now.hour % 12 or 12
-    am_pm = "AM" if now.hour < 12 else "PM"
-    return f"{now.month}.{now.day}.{now.year}_{hour_12}.{now.minute:02d}.{now.second:02d}{am_pm}"
 
 
 def build_main_branch_names(workflow_name: str, now: datetime | None = None) -> tuple[str, str]:
@@ -31,7 +20,7 @@ def build_main_branch_names(workflow_name: str, now: datetime | None = None) -> 
     workflow_segment = re.sub(r"[^a-zA-Z0-9._-]+", "-", workflow_name).strip("-")
     if not workflow_segment:
         workflow_segment = "workflow"
-    run_prefix = f"{BRANCH_PREFIX}/{workflow_segment}/{format_branch_timestamp(now=now)}"
+    run_prefix = f"{BRANCH_PREFIX}/{workflow_segment}/{format_timestamp(now=now)}"
     return run_prefix, f"{run_prefix}/base"
 
 
