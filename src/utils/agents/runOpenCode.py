@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Protocol
 
-from functions.oneExportPerFile.shell_runner import run_cmd
+from tasks.oneExportPerFile.shell_runner import run_cmd
 
 
 class _ProgressLike(Protocol):

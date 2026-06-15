@@ -3,15 +3,15 @@
 splitLargeComponent.py — Split large React components into smaller, reusable components.
 
 Usage:
-    python -m SplitLargeComponent.splitLargeComponent \\
-        --repo /path/to/manhunt/manhunt-app \\
-        --dir app \\
-        --components-dir components \\
-        --max-files 5 \\
+    python -m tasks.splitLargeComponents.splitLargeComponents \
+        --repo /path/to/manhunt/manhunt-app \
+        --dir app \
+        --components-dir components \
+        --max-files 5 \
         --verbose
 
     # Or target a specific file:
-    python -m SplitLargeComponent.splitLargeComponent \\
+    python -m tasks.splitLargeComponents.splitLargeComponents \
         --repo /path/to/manhunt/manhunt-app \\
         --file app/lobby.tsx \\
         --components-dir components \\
@@ -41,7 +41,7 @@ Splitting rules passed to the opencode agent:
   - This is an intermediate step toward a unified component library; favour generic,
     prop-driven components over highly specialised one-off components.
 
-Progress is written to jedi/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md.
+Progress is written to bulk-refactor/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md.
 """
 
 from __future__ import annotations

@@ -13,7 +13,7 @@ https://opencode.ai/download
 Inline short single-use exports in the `lib/` directory of a target repo:
 
 ```bash
-python -m functions.inlineShortFunctions.inlineShortFunctions \
+python -m tasks.inlineShortFunctions.inlineShortFunctions \
   --repo /path/to/manhunt/manhunt-app \
   --dir lib \
   --short-threshold 3 \
@@ -23,7 +23,7 @@ python -m functions.inlineShortFunctions.inlineShortFunctions \
 Or enforce one export per file across a hooks directory (A common pattern in lovable projects):
 
 ```bash
-python -m functions.oneExportPerFile.oneExportPerFile \
+python -m tasks.oneExportPerFile.oneExportPerFile \
   --repo /path/to/my-app \
   --dir src/hooks \
   --verbose
@@ -38,13 +38,13 @@ Split large components first, then collect the resulting page-specific files int
 ```bash
 cd /path/to/jedi/src
 
-python -m functions.splitLargeComponents.splitLargeComponents \
+python -m tasks.splitLargeComponents.splitLargeComponents \
   --repo /path/to/manhunt/manhunt-app \
   --dir app \
   --components-dir components \
   --verbose
 
-python -m functions.collectPageSpecificFiles.collectPageSpecificFiles \
+python -m tasks.collectPageSpecificFiles.collectPageSpecificFiles \
   --repo /path/to/manhunt/manhunt-app \
   --roots-dir app \
   --target-dir components \
@@ -64,19 +64,19 @@ Inexpensive/free models are sufficient. The tasks are simple enough with enough 
 1. Open a browser and manually verify the app works end-to-end.
 2. Run `fallow --json > fallow_before.json` to capture a baseline score.
 3. Run inlineShortFunctions:
-     python -m functions.inlineShortFunctions.inlineShortFunctions \
+     python -m tasks.inlineShortFunctions.inlineShortFunctions \
        --repo /path/to/manhunt/manhunt-app --dir lib --verbose
 4. Run static analysis and unit tests. Open a browser and confirm behavior is unchanged.
 5. Run splitLargeComponents:
-     python -m functions.splitLargeComponents.splitLargeComponents \
+     python -m tasks.splitLargeComponents.splitLargeComponents \
        --repo /path/to/manhunt/manhunt-app --dir app --components-dir components --verbose
 6. Run static analysis and unit tests. Open a browser and confirm behavior is unchanged.
 7. Run oneExportPerFile:
-     python -m functions.oneExportPerFile.oneExportPerFile \
+     python -m tasks.oneExportPerFile.oneExportPerFile \
        --repo /path/to/manhunt/manhunt-app --dir src/hooks --verbose
 8. Run static analysis and unit tests. Open a browser and confirm behavior is unchanged.
 9. Run collectPageSpecificFiles:
-     python -m functions.collectPageSpecificFiles.collectPageSpecificFiles \
+     python -m tasks.collectPageSpecificFiles.collectPageSpecificFiles \
        --repo /path/to/manhunt/manhunt-app --roots-dir app --target-dir components --verbose
 10. Run static analysis and unit tests. Open a browser and confirm behavior is unchanged.
 11. Run `fallow --json > fallow_after.json` and diff the two reports to show the score improvement.

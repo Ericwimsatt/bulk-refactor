@@ -3,7 +3,7 @@
 oneExportPerFile.py — Refactor a directory so every .ts/.tsx file has exactly one export.
 
 Usage:
-    python -m functions.oneExportPerFile.oneExportPerFile \\
+    python -m tasks.oneExportPerFile.oneExportPerFile \\
         --repo /path/to/stemwise \\
         --dir src/hooks \\
         --max-files 5 \\
@@ -17,7 +17,7 @@ For each file with multiple exports the script will:
      concurrently in a thread pool.
   5. Once every branch is finished, merge them all back to the main branch together.
 
-Progress is written to jedi/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md.
+Progress is written to bulk-refactor/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md.
 """
 
 from __future__ import annotations
@@ -42,9 +42,9 @@ from utils.gitOperations.branch_manager import (
     merge_branch,
     get_staged_diff,
 )
-from functions.oneExportPerFile.checkIsImportedElsewhere import is_imported_elsewhere
+from .checkIsImportedElsewhere import is_imported_elsewhere
 from utils.agents.runOpenCode import run_opencode
-from functions.oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
+from .tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
 from utils.progressTracker.progressTracker import ProgressTracker
 
 # ── export helpers ────────────────────────────────────────────────────────────

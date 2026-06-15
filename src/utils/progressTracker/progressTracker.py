@@ -7,17 +7,17 @@ from pathlib import Path
 
 from utils.format_timestamp import format_timestamp
 
-JEDI_ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 class ProgressTracker:
     """Append-only progress logger used across automation scripts."""
 
     def __init__(self, run_name: str, verbose: bool = False) -> None:
-        print(JEDI_ROOT)
+        print(ROOT)
         ts = format_timestamp()
         uid = uuid.uuid4().hex[:8]
-        self.run_dir = JEDI_ROOT / "Progress" / f"process_{ts}_{uid}"
+        self.run_dir = ROOT / "Progress" / f"process_{ts}_{uid}"
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.log_file = self.run_dir / "progress.md"
         self.verbose = verbose

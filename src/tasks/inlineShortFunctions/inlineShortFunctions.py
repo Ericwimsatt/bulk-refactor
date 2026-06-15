@@ -3,7 +3,7 @@
 inlineShortFunctions.py — Inline exported functions that are only used in one other file.
 
 Usage:
-    python -m functions.inlineShortFunctions.inlineShortFunctions \\
+    python -m tasks.inlineShortFunctions.inlineShortFunctions \\
         --repo /path/to/repo \\
         --dir src/lib \\
         --short-threshold 3 \\
@@ -22,7 +22,7 @@ Git workflow mirrors oneExportPerFile:
   - A base branch + worktree is created for the run.
   - Each source file gets its own per-file branch + worktree.
   - All per-file branches are merged back to the base branch at the end.
-  - Progress is written to jedi/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md.
+  - Progress is written to bulk-refactor/Progress/process_{HHMMSS}_{YYYYMMDD}_{uid}/progress.md.
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ from utils.gitOperations.branch_manager import (
     get_staged_diff,
 )
 from utils.agents.runOpenCode import run_opencode
-from functions.inlineShortFunctions.findSingleUseExports import (
+from .findSingleUseExports import (
     FunctionTarget,
     find_single_use_exports,
     extract_function_bounds,

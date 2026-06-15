@@ -1,4 +1,4 @@
-"""Simple shell command runner used across jedi scripts."""
+"""Simple shell command runner used across bulk-refactor scripts."""
 from __future__ import annotations
 
 import subprocess

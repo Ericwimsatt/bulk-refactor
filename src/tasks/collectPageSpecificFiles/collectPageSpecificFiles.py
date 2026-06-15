@@ -3,7 +3,7 @@
 collectPageSpecificFiles.py — Move page-specific files from a shared directory into the page's own folder.
 
 Usage:
-    python -m functions.collectPageSpecificFiles.collectPageSpecificFiles \\
+    python -m tasks.collectPageSpecificFiles.collectPageSpecificFiles \\
         --repo /path/to/repo \\
         --roots-dir app \\
         --target-dir components \\
@@ -42,12 +42,12 @@ from utils.gitOperations.branch_manager import (
     remove_worktree,
     get_staged_diff,
 )
-from functions.oneExportPerFile.shell_runner import run_cmd
+from tasks.oneExportPerFile.shell_runner import run_cmd
 from utils.progressTracker.progressTracker import ProgressTracker
 
 # ── import resolution ─────────────────────────────────────────────────────────
 
-_EXCLUDED_DIRS = {"node_modules", ".git", ".jedi-worktrees", "_generated", ".expo"}
+_EXCLUDED_DIRS = {"node_modules", ".git", ".bulk-refactor-worktrees", "_generated", ".expo"}
 
 
 def _try_extensions(base: Path) -> Path | None:
@@ -88,7 +88,7 @@ def find_all_ts_files(directory: Path) -> list[Path]:
     results: list[Path] = []
     for p in directory.rglob("*"):
         if p.is_file() and p.suffix in (".ts", ".tsx"):
-            # Only check relative parts (not the ancestor dirs like .jedi-worktrees)
+            # Only check relative parts (not the ancestor dirs like .bulk-refactor-worktrees)
             try:
                 rel_parts = p.relative_to(directory).parts
             except ValueError:

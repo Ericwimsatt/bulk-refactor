@@ -4,17 +4,17 @@ from datetime import datetime
 from pathlib import Path
 import re
 
-from functions.oneExportPerFile.shell_runner import run_cmd
+from tasks.oneExportPerFile.shell_runner import run_cmd
 from utils.format_timestamp import format_timestamp
 
-BRANCH_PREFIX = "JediBranch"
+BRANCH_PREFIX = "BulkRefactorBranch"
 
 
 def build_main_branch_names(workflow_name: str, now: datetime | None = None) -> tuple[str, str]:
     """Build a standardized run prefix and main branch for a workflow run.
 
     Returns ``(run_prefix, main_branch)`` where:
-      - run_prefix: ``JediBranch/<workflow>/<timestamp>``
+      - run_prefix: ``BulkRefactorBranch/<workflow>/<timestamp>``
       - main_branch: ``<run_prefix>/base``
     """
     workflow_segment = re.sub(r"[^a-zA-Z0-9._-]+", "-", workflow_name).strip("-")
@@ -47,8 +47,8 @@ def _slug(text: str) -> str:
 
 
 def _worktree_base(repo_root: Path) -> Path:
-    """Root directory for all jedi-managed worktrees for the given repo."""
-    return repo_root.parent / ".jedi-worktrees" / repo_root.name
+    """Root directory for all bulk-refactor-managed worktrees for the given repo."""
+    return repo_root.parent / ".bulk-refactor-worktrees" / repo_root.name
 
 
 def checkout_branch(repo_root: Path, branch: str) -> None:
@@ -76,7 +76,7 @@ def remove_worktree(repo_root: Path, worktree_path: Path) -> None:
     run_cmd(["git", "worktree", "remove", "--force", str(worktree_path)], cwd=repo_root)
 
 
-def list_jedi_worktrees(repo_root: Path, prefix: str = BRANCH_PREFIX) -> list[Path]:
+def list_worktrees(repo_root: Path, prefix: str = BRANCH_PREFIX) -> list[Path]:
     """Return paths of all worktrees whose checked-out branch starts with *prefix*."""
     # Prune stale entries first so we only see live worktrees.
     run_cmd(["git", "worktree", "prune"], cwd=repo_root)

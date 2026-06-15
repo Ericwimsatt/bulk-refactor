@@ -6,8 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from functions.oneExportPerFile.shell_runner import run_cmd
-from functions.oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
+from tasks.oneExportPerFile.shell_runner import run_cmd
+from tasks.oneExportPerFile.tsxConstants import EXPORT_DECL_RE, EXPORT_BRACE_RE
 
 
 # ── data classes ──────────────────────────────────────────────────────────────
@@ -43,7 +43,7 @@ def find_all_importers(name: str, repo_root: Path, exclude_file: Path) -> list[P
                 str(repo_root),
                 "--exclude-dir=node_modules",
                 "--exclude-dir=.git",
-                "--exclude-dir=.jedi-worktrees",
+                "--exclude-dir=.bulk-refactor-worktrees",
             ],
             cwd=repo_root,
             check=False,

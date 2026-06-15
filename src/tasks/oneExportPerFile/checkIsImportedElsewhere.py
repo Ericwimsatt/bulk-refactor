@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from functions.oneExportPerFile.shell_runner import run_cmd
+from .shell_runner import run_cmd
 
 
 def is_imported_elsewhere(name: str, repo_root: Path, exclude_file: Path) -> bool:
